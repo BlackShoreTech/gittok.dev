@@ -36,3 +36,9 @@ Featured projects receive prominent placement in the feed, increased visibility,
 - **Performance:** Intersection Observer API
 - **Build Tool:** Vite
 - **Testing:** Vitest (coming soon)
+
+# Adding your repo(via pull request)
+1. Star this repo
+2. Fork this repo
+3. Add your repo in the correct format to the [json database file](https://github.com/BlackShoreTech/gittok.dev/blob/main/static/data/featured_repos.json)
+4. Create a pull request
