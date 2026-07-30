@@ -1,0 +1,2897 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050207">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="TikDev turns GitHub discovery into a fast, swipeable feed of open-source projects.">
+  <link id="canonicalUrl" rel="canonical" href="">
+  <meta name="keywords" content="GitHub, open source, developers, repositories, programming, project discovery">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TikDev — Swipe Through Open Source">
+  <meta property="og:description" content="Discover useful GitHub repositories in a fast, mobile-first feed.">
+  <meta id="openGraphUrl" property="og:url" content="">
+  <meta id="openGraphImage" property="og:image" content="__TIKDEV_OG_IMAGE__">
+  <meta property="og:image:alt" content="Purple DedSec Project butterfly emblem on a black background">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TikDev — Swipe Through Open Source">
+  <meta name="twitter:description" content="Discover useful GitHub repositories in a fast, mobile-first feed.">
+  <meta id="twitterImage" name="twitter:image" content="__TIKDEV_OG_IMAGE__">
+  <meta name="twitter:image:alt" content="Purple DedSec Project butterfly emblem on a black background">
+  <link rel="icon" type="image/png" sizes="512x512" href="dedsec-butterfly.png">
+  <link rel="apple-touch-icon" href="dedsec-butterfly.png">
+  <title>TikDev — Swipe Through Open Source</title>
+  <style>
+    :root {
+      --bg: #080a0f;
+      --surface: rgba(17, 20, 29, .82);
+      --surface-solid: #11141d;
+      --surface-2: #181c27;
+      --text: #f7f8fb;
+      --muted: #a0a8b8;
+      --faint: #697184;
+      --line: rgba(255, 255, 255, .10);
+      --primary: #7c5cff;
+      --primary-2: #21d4fd;
+      --positive: #4ade80;
+      --warning: #facc15;
+      --danger: #fb7185;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .42);
+      --header-h: 72px;
+      --radius: 24px;
+    }
+
+    html[data-theme="light"] {
+      --bg: #f4f6fb;
+      --surface: rgba(255, 255, 255, .88);
+      --surface-solid: #ffffff;
+      --surface-2: #eef1f7;
+      --text: #10131b;
+      --muted: #596174;
+      --faint: #8790a2;
+      --line: rgba(15, 23, 42, .11);
+      --shadow: 0 24px 70px rgba(30, 41, 59, .14);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 300px;
+      min-height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(124, 92, 255, .16), transparent 28rem),
+        radial-gradient(circle at 90% 80%, rgba(33, 212, 253, .10), transparent 28rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, a { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { color: inherit; }
+    a { color: inherit; }
+    ::selection { background: rgba(124, 92, 255, .35); }
+
+    .skip-link {
+      position: fixed;
+      top: -100px;
+      left: 16px;
+      z-index: 1000;
+      padding: 12px 16px;
+      color: white;
+      background: #111827;
+      border-radius: 12px;
+    }
+    .skip-link:focus { top: 12px; }
+
+    .app-header {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 50;
+      height: var(--header-h);
+      padding: max(10px, env(safe-area-inset-top)) clamp(12px, 3vw, 28px) 10px;
+      display: grid;
+      grid-template-columns: auto minmax(180px, 620px) auto;
+      align-items: center;
+      gap: 18px;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 94%, transparent), color-mix(in srgb, var(--bg) 76%, transparent));
+      backdrop-filter: blur(22px) saturate(140%);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: max-content;
+      text-decoration: none;
+      font-weight: 900;
+      letter-spacing: -.045em;
+      font-size: clamp(1.25rem, 3vw, 1.7rem);
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      color: white;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      box-shadow: 0 8px 24px rgba(124, 92, 255, .28);
+      transform: rotate(-4deg);
+    }
+
+    .brand-mark::after {
+      content: "<>";
+      font: 800 12px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: -2px;
+      transform: rotate(4deg);
+    }
+
+    .search-form {
+      width: 100%;
+      position: relative;
+    }
+
+    .search-form svg {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      height: 44px;
+      padding: 0 46px 0 44px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s, background .2s;
+    }
+
+    .search-input::placeholder { color: var(--faint); }
+    .search-input:focus {
+      border-color: color-mix(in srgb, var(--primary) 75%, white 5%);
+      box-shadow: 0 0 0 4px rgba(124, 92, 255, .13);
+      background: var(--surface-solid);
+    }
+
+    .search-submit {
+      position: absolute;
+      right: 5px;
+      top: 5px;
+      height: 34px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 999px;
+      color: white;
+      background: linear-gradient(135deg, var(--primary), #6545ef);
+      cursor: pointer;
+      font-weight: 750;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-button {
+      width: 42px;
+      height: 42px;
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform .2s, color .2s, border-color .2s, background .2s;
+    }
+    .icon-button:hover, .icon-button:focus-visible {
+      color: var(--text);
+      background: var(--surface-2);
+      border-color: rgba(124, 92, 255, .48);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .icon-button svg { width: 20px; height: 20px; }
+
+    .mode-bar {
+      position: fixed;
+      z-index: 45;
+      top: var(--header-h);
+      left: 0;
+      right: 0;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 7px 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+    }
+    .mode-bar::-webkit-scrollbar { display: none; }
+
+    .mode-button {
+      flex: 0 0 auto;
+      height: 34px;
+      padding: 0 15px;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 720;
+    }
+    .mode-button:hover { color: var(--text); background: var(--surface); }
+    .mode-button.active {
+      color: white;
+      background: linear-gradient(135deg, var(--primary), #6545ef);
+      box-shadow: 0 8px 24px rgba(124, 92, 255, .2);
+    }
+
+    .topic-status {
+      flex: 0 0 auto;
+      max-width: min(42vw, 300px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--faint);
+      font-size: .82rem;
+      padding-left: 8px;
+    }
+
+    .feed {
+      position: fixed;
+      inset: calc(var(--header-h) + 50px) 0 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-snap-type: y proximity;
+      overscroll-behavior-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(124, 92, 255, .55) transparent;
+    }
+
+    .feed-card {
+      min-height: calc(100dvh - var(--header-h) - 50px);
+      scroll-snap-align: start;
+      scroll-snap-stop: normal;
+      display: grid;
+      place-items: center;
+      padding: clamp(14px, 3vw, 32px);
+      position: relative;
+    }
+
+    .feed-card::before {
+      content: "";
+      position: absolute;
+      inset: 10% 8%;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--glow, rgba(124, 92, 255, .10)), transparent 68%);
+      filter: blur(22px);
+      pointer-events: none;
+    }
+
+    .repo-shell {
+      position: relative;
+      width: min(1120px, 100%);
+      min-height: min(690px, calc(100dvh - var(--header-h) - 90px));
+      max-height: calc(100dvh - var(--header-h) - 78px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 86px;
+      overflow: hidden;
+      background: linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 94%, var(--primary) 6%), var(--surface));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .repo-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(110deg, rgba(255,255,255,.055), transparent 34%);
+      z-index: -1;
+    }
+
+    .repo-main {
+      min-width: 0;
+      padding: clamp(22px, 4vw, 52px);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .repo-topline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      flex: 0 0 auto;
+      object-fit: cover;
+      border-radius: 13px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .owner-block { min-width: 0; }
+    .owner-name {
+      display: block;
+      color: var(--muted);
+      font: 650 .88rem/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .updated { color: var(--faint); font-size: .76rem; }
+
+    .repo-title {
+      margin: 0;
+      max-width: 900px;
+      font-size: clamp(2.1rem, 6vw, 5.6rem);
+      line-height: .96;
+      letter-spacing: -.06em;
+      overflow-wrap: anywhere;
+    }
+
+    .repo-description {
+      margin: 0;
+      max-width: 820px;
+      color: var(--muted);
+      font-size: clamp(1rem, 2vw, 1.3rem);
+      line-height: 1.6;
+    }
+
+    .repo-meta, .topics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 31px;
+      padding: 5px 11px;
+      color: var(--muted);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: .79rem;
+      line-height: 1;
+    }
+
+    .language-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--lang, #8b95a7);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--lang, #8b95a7) 22%, transparent);
+    }
+
+    .topic-pill {
+      border: 0;
+      cursor: pointer;
+      transition: color .18s, border-color .18s, transform .18s;
+    }
+    .topic-pill:hover { color: var(--text); transform: translateY(-1px); }
+
+    .card-spacer { flex: 1; min-height: 8px; }
+
+    .repo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .primary-link, .secondary-button {
+      min-height: 45px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 0 18px;
+      border-radius: 13px;
+      text-decoration: none;
+      font-weight: 780;
+      cursor: pointer;
+      transition: transform .2s, box-shadow .2s, border-color .2s, background .2s;
+    }
+
+    .primary-link {
+      color: white;
+      border: 0;
+      background: linear-gradient(135deg, var(--primary), #6545ef);
+      box-shadow: 0 12px 30px rgba(124, 92, 255, .22);
+    }
+    .primary-link:hover { transform: translateY(-2px); box-shadow: 0 15px 34px rgba(124, 92, 255, .32); }
+
+    .secondary-button {
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+    }
+    .secondary-button:hover { border-color: rgba(124, 92, 255, .48); transform: translateY(-1px); }
+    .primary-link svg, .secondary-button svg { width: 18px; height: 18px; }
+
+    .side-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 20px 10px;
+      border-left: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    }
+
+    .stat-action {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .73rem;
+      font-weight: 700;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      cursor: pointer;
+      transition: color .2s, transform .2s, border-color .2s, background .2s;
+    }
+    .stat-action:hover .stat-icon, .stat-icon:hover {
+      color: var(--text);
+      transform: translateY(-2px) scale(1.02);
+      border-color: rgba(124, 92, 255, .48);
+      background: var(--surface-solid);
+    }
+    .stat-icon svg { width: 23px; height: 23px; }
+    .star-icon { color: var(--warning); }
+    .fork-icon { color: var(--primary-2); }
+
+    .intro-card .repo-shell {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .intro-card .repo-main { align-items: center; justify-content: center; }
+    .intro-card .repo-description { max-width: 690px; }
+    .intro-card .repo-actions { justify-content: center; }
+    .eyebrow {
+      color: var(--primary-2);
+      font: 760 .78rem/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface-2), color-mix(in srgb, var(--surface-2) 60%, white 7%), var(--surface-2));
+      background-size: 220% 100%;
+      animation: shimmer 1.3s infinite linear;
+      border-radius: 12px;
+    }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+
+    .status-card .repo-main { justify-content: center; align-items: flex-start; }
+    .status-icon {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      color: var(--primary-2);
+      background: rgba(33, 212, 253, .09);
+      border: 1px solid rgba(33, 212, 253, .25);
+      border-radius: 18px;
+    }
+    .status-icon svg { width: 28px; height: 28px; }
+
+    .position-indicator {
+      position: fixed;
+      z-index: 40;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(14px, env(safe-area-inset-bottom));
+      padding: 8px 11px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      backdrop-filter: blur(14px);
+      font: 700 .74rem/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      pointer-events: none;
+    }
+
+    dialog {
+      width: min(720px, calc(100% - 24px));
+      max-height: min(760px, calc(100dvh - 24px));
+      padding: 0;
+      overflow: hidden;
+      color: var(--text);
+      background: var(--surface-solid);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, .66); backdrop-filter: blur(8px); }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-header h2 { margin: 0; font-size: 1.2rem; }
+    .modal-body { padding: 22px 24px 26px; overflow-y: auto; max-height: calc(100dvh - 140px); }
+    .modal-copy { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
+    .topic-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+
+    .topic-choice {
+      min-height: 38px;
+      padding: 7px 13px;
+      color: var(--muted);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: .86rem;
+    }
+    .topic-choice:hover { color: var(--text); border-color: rgba(124, 92, 255, .45); }
+    .topic-choice.selected {
+      color: white;
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--primary), #6545ef);
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 22px;
+    }
+    .text-button {
+      padding: 10px;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+    }
+    .text-button:hover { color: var(--text); }
+
+    .readme-dialog { width: min(900px, calc(100% - 24px)); }
+    .readme-meta { color: var(--muted); font-size: .82rem; }
+    .readme-content {
+      margin: 0;
+      min-height: 220px;
+      max-height: calc(100dvh - 190px);
+      padding: 22px 24px 30px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      background: var(--surface-solid);
+      font: 400 .88rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 100;
+      left: 50%;
+      bottom: max(26px, env(safe-area-inset-bottom));
+      max-width: calc(100% - 32px);
+      padding: 11px 15px;
+      color: white;
+      background: #171a24;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      box-shadow: 0 12px 36px rgba(0,0,0,.35);
+      opacity: 0;
+      transform: translate(-50%, 18px);
+      pointer-events: none;
+      transition: opacity .22s, transform .22s;
+      font-size: .86rem;
+    }
+    .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 760px) {
+      :root { --header-h: 64px; }
+      .app-header {
+        grid-template-columns: auto 1fr auto;
+        gap: 9px;
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+      .brand-text { display: none; }
+      .brand-mark { width: 38px; height: 38px; }
+      .search-submit { display: none; }
+      .search-input { padding-right: 15px; }
+      .header-actions .icon-button:first-child { display: none; }
+      .mode-bar { justify-content: flex-start; }
+      .topic-status { display: none; }
+      .feed-card { padding: 10px; }
+      .repo-shell {
+        min-height: calc(100dvh - var(--header-h) - 70px);
+        max-height: calc(100dvh - var(--header-h) - 70px);
+        grid-template-columns: 1fr;
+        border-radius: 19px;
+      }
+      .repo-main {
+        padding: 23px 21px 104px;
+        gap: 18px;
+        overflow-y: auto;
+      }
+      .repo-title { font-size: clamp(2.2rem, 13vw, 4.3rem); }
+      .repo-description { font-size: .98rem; }
+      .side-actions {
+        position: absolute;
+        right: 13px;
+        bottom: 96px;
+        gap: 14px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+      }
+      .stat-icon { width: 44px; height: 44px; background: rgba(10,12,18,.72); color: white; }
+      html[data-theme="light"] .stat-icon { background: rgba(255,255,255,.84); color: #10131b; }
+      .stat-action > span:last-child { color: var(--text); text-shadow: 0 1px 10px var(--bg); }
+      .repo-actions {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        bottom: 20px;
+        padding-right: 0;
+      }
+      .primary-link { flex: 1 1 auto; }
+      .secondary-button { padding: 0 14px; }
+      .secondary-button .button-label { display: none; }
+      .position-indicator { display: none; }
+      .intro-card .repo-main { padding-bottom: 28px; }
+      .intro-card .repo-actions { position: static; padding-right: 0; }
+    }
+
+    @media (max-width: 400px) {
+      .mode-button { padding: 0 12px; }
+      .repo-main { padding-left: 18px; padding-right: 18px; }
+      .repo-title { font-size: clamp(2rem, 12vw, 3.5rem); }
+      .pill:nth-child(n+4), .topic-pill:nth-child(n+4) { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+
+
+    /* DedSec Project visual system and adaptive layout */
+    :root {
+      --bg: #050207;
+      --bg-soft: #0d0712;
+      --surface: rgba(17, 9, 24, .88);
+      --surface-solid: #100817;
+      --surface-2: #1b1024;
+      --text: #f8f5fb;
+      --muted: #b9afc4;
+      --faint: #81758d;
+      --line: rgba(181, 88, 255, .22);
+      --primary: #8d2de2;
+      --primary-strong: #6f16b8;
+      --primary-2: #39d779;
+      --positive: #39d779;
+      --warning: #ffd166;
+      --danger: #ff496d;
+      --shadow: 0 28px 90px rgba(0, 0, 0, .58), 0 0 0 1px rgba(141, 45, 226, .08);
+      --header-h: 76px;
+      --mode-h: 54px;
+      --radius: clamp(18px, 2vw, 28px);
+      --content-max: 1380px;
+    }
+
+    html[data-theme="light"] {
+      --bg: #f7f4fb;
+      --bg-soft: #eee7f5;
+      --surface: rgba(255, 255, 255, .92);
+      --surface-solid: #ffffff;
+      --surface-2: #eee8f4;
+      --text: #160f1c;
+      --muted: #5f536b;
+      --faint: #85778f;
+      --line: rgba(77, 28, 103, .17);
+      --primary: #70229d;
+      --primary-strong: #541176;
+      --primary-2: #08733e;
+      --positive: #087d43;
+      --warning: #9a6500;
+      --danger: #c5264c;
+      --shadow: 0 26px 70px rgba(62, 32, 76, .16), 0 0 0 1px rgba(112, 34, 157, .06);
+    }
+
+    html {
+      min-width: 280px;
+      min-height: 100%;
+      background: var(--bg);
+    }
+
+    body {
+      width: 100%;
+      min-width: 280px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background:
+        radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--primary) 22%, transparent), transparent min(32rem, 42vw)),
+        radial-gradient(circle at 90% 84%, color-mix(in srgb, var(--primary-2) 13%, transparent), transparent min(34rem, 44vw)),
+        linear-gradient(145deg, var(--bg), color-mix(in srgb, var(--bg) 92%, var(--bg-soft)));
+    }
+
+    button, input, a { min-width: 0; }
+    img { max-width: 100%; }
+    :focus-visible { outline: 3px solid color-mix(in srgb, var(--primary-2) 78%, white 10%); outline-offset: 3px; }
+    ::selection { color: white; background: color-mix(in srgb, var(--primary) 76%, black 8%); }
+
+    .app-header {
+      height: var(--header-h);
+      grid-template-columns: minmax(140px, .6fr) minmax(240px, 720px) minmax(140px, .6fr);
+      gap: clamp(12px, 2.2vw, 28px);
+      padding: max(11px, env(safe-area-inset-top)) clamp(14px, 3vw, 38px) 11px;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 96%, transparent), color-mix(in srgb, var(--bg) 82%, transparent));
+      box-shadow: 0 8px 34px rgba(0, 0, 0, .18);
+    }
+
+    .brand { justify-self: start; }
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px 5px 12px 5px;
+      background: linear-gradient(145deg, var(--primary), var(--primary-strong) 58%, color-mix(in srgb, var(--primary-2) 70%, var(--primary-strong)));
+      border: 1px solid color-mix(in srgb, var(--primary-2) 40%, transparent);
+      box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 30%, transparent), inset 0 1px 0 rgba(255,255,255,.22);
+    }
+    .brand-mark::after { content: "</>"; letter-spacing: -2.6px; }
+    .brand-text { text-shadow: 0 0 22px color-mix(in srgb, var(--primary) 28%, transparent); }
+
+    .search-form { max-width: 720px; justify-self: center; }
+    .search-input {
+      height: 48px;
+      border-radius: 15px;
+      border-color: color-mix(in srgb, var(--line) 84%, transparent);
+      background: color-mix(in srgb, var(--surface) 95%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .search-input:focus {
+      border-color: color-mix(in srgb, var(--primary) 72%, var(--primary-2) 18%);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 17%, transparent), 0 12px 34px rgba(0,0,0,.12);
+    }
+    .search-submit {
+      top: 6px;
+      right: 6px;
+      height: 36px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+      box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 24%, transparent);
+    }
+
+    .header-actions { justify-self: end; }
+    .icon-button {
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--surface) 94%, transparent);
+    }
+    .icon-button:hover, .icon-button:focus-visible {
+      border-color: color-mix(in srgb, var(--primary) 58%, var(--primary-2) 18%);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 14%, transparent);
+    }
+
+    .mode-bar {
+      top: var(--header-h);
+      height: var(--mode-h);
+      gap: 6px;
+      padding-inline: clamp(12px, 3vw, 38px);
+      background: color-mix(in srgb, var(--bg) 89%, transparent);
+    }
+    .mode-button { min-height: 36px; padding-inline: clamp(13px, 2vw, 18px); }
+    .mode-button.active,
+    .topic-choice.selected,
+    .primary-link {
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong) 68%, color-mix(in srgb, var(--primary-2) 28%, var(--primary-strong)));
+      box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 25%, transparent);
+    }
+    .mode-button.active { border: 1px solid color-mix(in srgb, var(--primary-2) 28%, transparent); }
+
+    .feed {
+      inset: calc(var(--header-h) + var(--mode-h)) 0 0;
+      scrollbar-color: color-mix(in srgb, var(--primary) 62%, var(--primary-2) 18%) transparent;
+    }
+    .feed-card {
+      min-height: calc(100dvh - var(--header-h) - var(--mode-h));
+      padding: clamp(12px, 2.7vw, 34px);
+    }
+    .feed-card::before {
+      inset: 7% 4%;
+      background: radial-gradient(circle, var(--glow, color-mix(in srgb, var(--primary) 13%, transparent)), transparent 70%);
+    }
+
+    .repo-shell {
+      width: min(var(--content-max), 100%);
+      min-height: min(720px, calc(100dvh - var(--header-h) - var(--mode-h) - 28px));
+      max-height: calc(100dvh - var(--header-h) - var(--mode-h) - 20px);
+      grid-template-columns: minmax(0, 1fr) clamp(76px, 6vw, 92px);
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 94%, var(--primary) 6%), color-mix(in srgb, var(--surface) 96%, var(--primary-2) 4%));
+      border-color: color-mix(in srgb, var(--line) 90%, transparent);
+    }
+    .repo-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(var(--primary), var(--primary-2));
+      opacity: .72;
+      z-index: 2;
+    }
+    .repo-shell::after {
+      background:
+        linear-gradient(110deg, rgba(255,255,255,.06), transparent 30%),
+        radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 28%);
+    }
+
+    .repo-main {
+      padding: clamp(24px, 4.2vw, 58px);
+      gap: clamp(16px, 2.1vh, 26px);
+      overflow: auto;
+      overscroll-behavior-y: auto;
+    }
+    .repo-topline { gap: 13px; }
+    .avatar { width: 46px; height: 46px; border-radius: 14px 6px 14px 6px; }
+    .owner-name { color: color-mix(in srgb, var(--muted) 86%, var(--primary-2) 14%); }
+    .repo-title {
+      max-width: 1050px;
+      font-size: clamp(2.15rem, 5.4vw, 5.9rem);
+      line-height: .94;
+      text-wrap: balance;
+    }
+    .repo-description { max-width: 920px; font-size: clamp(.98rem, 1.55vw, 1.26rem); }
+    .pill {
+      min-height: 34px;
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--surface-2) 93%, transparent);
+    }
+    .topic-pill:hover, .pill[href]:hover { border-color: color-mix(in srgb, var(--primary-2) 36%, var(--primary) 28%); }
+
+    .primary-link, .secondary-button { min-height: 48px; border-radius: 13px 6px 13px 6px; }
+    .primary-link:hover { box-shadow: 0 16px 36px color-mix(in srgb, var(--primary) 34%, transparent); }
+    .secondary-button:hover { border-color: color-mix(in srgb, var(--primary) 48%, var(--primary-2) 18%); }
+
+    .side-actions {
+      gap: clamp(17px, 2.5vh, 28px);
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--surface-2) 68%, transparent), color-mix(in srgb, var(--surface) 72%, transparent));
+    }
+    .stat-icon { border-radius: 14px 6px 14px 6px; }
+    .stat-action:hover .stat-icon, .stat-icon:hover { border-color: color-mix(in srgb, var(--primary) 48%, var(--primary-2) 20%); }
+    .fork-icon { color: var(--primary-2); }
+    .eyebrow { color: var(--primary-2); }
+
+    .position-indicator { border-radius: 10px 4px 10px 4px; }
+    dialog { border-radius: 22px 8px 22px 8px; }
+    .topic-choice { border-radius: 11px 5px 11px 5px; }
+    .status-icon { color: var(--primary-2); background: color-mix(in srgb, var(--primary-2) 10%, transparent); border-color: color-mix(in srgb, var(--primary-2) 30%, transparent); }
+    .toast { background: color-mix(in srgb, var(--surface-solid) 94%, black); border-color: color-mix(in srgb, var(--primary) 28%, var(--line)); }
+
+    @media (min-width: 1500px) {
+      :root { --content-max: 1480px; }
+      .repo-main { padding-inline: clamp(52px, 5vw, 78px); }
+      .repo-description { max-width: 1000px; }
+    }
+
+    @media (max-width: 1040px) {
+      .app-header { grid-template-columns: auto minmax(220px, 1fr) auto; }
+      .brand-text { font-size: 1.35rem; }
+      .repo-shell { grid-template-columns: minmax(0, 1fr) 74px; }
+      .repo-main { padding: clamp(24px, 4vw, 40px); }
+      .repo-title { font-size: clamp(2.15rem, 7.4vw, 4.8rem); }
+      .stat-icon { width: 44px; height: 44px; }
+    }
+
+    @media (max-width: 760px) {
+      :root { --header-h: 112px; --mode-h: 50px; }
+      .app-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: 44px 48px;
+        grid-template-areas:
+          "brand actions"
+          "search search";
+        align-content: center;
+        gap: 8px 10px;
+        padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+      }
+      .brand { grid-area: brand; }
+      .brand-text { display: inline; font-size: 1.24rem; }
+      .brand-mark { width: 38px; height: 38px; }
+      .header-actions { grid-area: actions; }
+      .header-actions .icon-button:first-child { display: inline-grid; }
+      .icon-button { width: 40px; height: 40px; border-radius: 12px; }
+      .search-form { grid-area: search; max-width: none; }
+      .search-input { height: 46px; border-radius: 13px; padding-right: 16px; }
+      .search-submit { display: none; }
+      .mode-bar { justify-content: flex-start; padding: 6px 10px; }
+      .mode-button { height: 36px; }
+      .topic-status { display: none; }
+
+      .feed-card { padding: 8px; }
+      .repo-shell {
+        min-height: calc(100dvh - var(--header-h) - var(--mode-h) - 16px);
+        max-height: calc(100dvh - var(--header-h) - var(--mode-h) - 16px);
+        grid-template-columns: 1fr;
+        border-radius: 18px 7px 18px 7px;
+      }
+      .repo-shell::before { width: 3px; }
+      .repo-main {
+        padding: 22px 18px 158px;
+        gap: 16px;
+        overflow-y: auto;
+      }
+      .repo-title { font-size: clamp(2rem, 12vw, 4.1rem); line-height: .96; }
+      .repo-description { font-size: .96rem; line-height: 1.55; }
+      .pill { min-height: 32px; padding: 5px 9px; font-size: .75rem; }
+
+      .side-actions {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 76px;
+        height: 58px;
+        z-index: 4;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 7px 8px;
+        border: 1px solid var(--line);
+        border-radius: 16px 6px 16px 6px;
+        background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+        backdrop-filter: blur(18px);
+      }
+      .stat-action { flex-direction: row; gap: 6px; font-size: .72rem; }
+      .stat-icon { width: 40px; height: 40px; border-radius: 12px 5px 12px 5px; }
+      .stat-icon svg { width: 20px; height: 20px; }
+      .stat-action > span:last-child { color: var(--text); text-shadow: none; }
+      html[data-theme="light"] .stat-icon { background: var(--surface-2); color: var(--text); }
+
+      .repo-actions {
+        left: 18px;
+        right: 18px;
+        bottom: 16px;
+        z-index: 5;
+        gap: 8px;
+      }
+      .primary-link { flex: 1 1 160px; }
+      .secondary-button { flex: 0 0 48px; width: 48px; padding: 0; }
+      .secondary-button .button-label { display: none; }
+      .intro-card .repo-main { padding: 28px 20px; }
+      .intro-card .repo-actions { position: static; width: 100%; }
+      .intro-card .secondary-button { flex: 1 1 150px; width: auto; padding-inline: 16px; }
+      .position-indicator { display: none; }
+
+      dialog, .readme-dialog {
+        width: calc(100% - 12px);
+        max-height: calc(100dvh - 12px);
+        margin: auto;
+        border-radius: 20px 7px 20px 7px;
+      }
+      .modal-header { padding: 17px 18px; }
+      .modal-body { padding: 18px; }
+      .readme-content { padding: 18px; }
+    }
+
+    @media (max-width: 430px) {
+      .brand-text { font-size: 1.1rem; }
+      .header-actions { gap: 5px; }
+      .icon-button { width: 38px; height: 38px; }
+      .mode-button { padding-inline: 12px; font-size: .82rem; }
+      .repo-main { padding-inline: 16px; }
+      .repo-title { font-size: clamp(1.85rem, 12vw, 3.35rem); }
+      .repo-topline { gap: 10px; }
+      .avatar { width: 40px; height: 40px; }
+      .repo-meta, .topics { gap: 7px; }
+      .side-actions { left: 14px; right: 14px; justify-content: space-between; gap: 5px; padding-inline: 6px; }
+      .repo-actions { left: 14px; right: 14px; }
+      .stat-action { gap: 4px; }
+      .stat-icon { width: 37px; height: 37px; }
+      .pill:nth-child(n+5), .topic-pill:nth-child(n+5) { display: none; }
+    }
+
+    @media (max-width: 340px) {
+      .brand-text { display: none; }
+      .header-actions .icon-button:first-child { display: none; }
+      .repo-main { padding: 18px 14px 150px; }
+      .repo-title { font-size: 1.9rem; }
+      .repo-description { font-size: .9rem; }
+      .side-actions { bottom: 72px; height: 54px; }
+      .stat-icon { width: 34px; height: 34px; }
+      .stat-action { font-size: .66rem; }
+      .primary-link, .secondary-button { min-height: 44px; }
+    }
+
+    @media (min-width: 761px) and (max-height: 700px) {
+      :root { --header-h: 64px; --mode-h: 46px; }
+      .app-header { padding-top: 8px; padding-bottom: 8px; }
+      .search-input { height: 42px; }
+      .search-submit { top: 4px; height: 34px; }
+      .repo-shell { min-height: calc(100dvh - var(--header-h) - var(--mode-h) - 18px); }
+      .repo-main { padding: 24px 32px; gap: 13px; }
+      .repo-title { font-size: clamp(2rem, 6.4vw, 4.2rem); }
+      .repo-description { font-size: .95rem; line-height: 1.45; }
+      .side-actions { gap: 13px; }
+      .stat-icon { width: 40px; height: 40px; }
+      .primary-link, .secondary-button { min-height: 43px; }
+    }
+
+    @media (max-width: 760px) and (max-height: 640px) {
+      :root { --header-h: 102px; --mode-h: 46px; }
+      .app-header { grid-template-rows: 40px 42px; }
+      .brand-mark { width: 34px; height: 34px; }
+      .search-input { height: 41px; }
+      .repo-main { padding-top: 16px; gap: 12px; }
+      .repo-title { font-size: clamp(1.75rem, 10vw, 3rem); }
+      .repo-description { font-size: .88rem; line-height: 1.42; }
+      .pill { min-height: 29px; }
+    }
+
+    @media (orientation: landscape) and (max-width: 920px) and (max-height: 540px) {
+      :root { --header-h: 58px; --mode-h: 42px; }
+      .app-header {
+        grid-template-columns: auto minmax(220px, 1fr) auto;
+        grid-template-rows: 1fr;
+        grid-template-areas: "brand search actions";
+        padding: 7px 10px;
+      }
+      .brand-text { display: none; }
+      .brand-mark { width: 36px; height: 36px; }
+      .header-actions .icon-button:first-child { display: none; }
+      .search-input { height: 42px; }
+      .mode-bar { padding-block: 3px; }
+      .mode-button { height: 32px; }
+      .repo-shell { grid-template-columns: minmax(0, 1fr) 68px; }
+      .repo-main { padding: 18px 24px; gap: 10px; }
+      .repo-title { font-size: clamp(1.8rem, 6.8vw, 3.4rem); }
+      .repo-description { max-width: 760px; font-size: .88rem; line-height: 1.38; }
+      .repo-meta, .topics { gap: 6px; }
+      .pill { min-height: 28px; padding-block: 4px; }
+      .side-actions {
+        position: static;
+        height: auto;
+        flex-direction: column;
+        justify-content: center;
+        gap: 9px;
+        padding: 8px;
+        border: 0;
+        border-left: 1px solid var(--line);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--surface-2) 62%, transparent);
+      }
+      .stat-action { flex-direction: column; }
+      .repo-actions { position: static; margin-top: auto; }
+      .primary-link, .secondary-button { min-height: 40px; }
+      .secondary-button { width: auto; flex-basis: auto; padding-inline: 12px; }
+    }
+
+    @media (pointer: coarse) {
+      .mode-button, .topic-choice, .text-button { min-height: 44px; }
+      .icon-button, .primary-link, .secondary-button { touch-action: manipulation; }
+    }
+
+    @supports not (backdrop-filter: blur(1px)) {
+      .app-header, .mode-bar, .side-actions, .position-indicator { background: var(--bg); }
+    }
+
+
+    /* Unified TikDev navigation, expanded discovery, fullscreen and music */
+    :root {
+      --nav-h: 76px;
+      --header-h: 0px;
+      --mode-h: 0px;
+    }
+
+    .app-header {
+      height: auto;
+      min-height: 68px;
+      grid-template-columns: auto minmax(290px, auto) minmax(260px, 1fr) auto;
+      grid-template-areas: "brand modes search actions";
+      align-items: center;
+      gap: 10px clamp(10px, 1.5vw, 22px);
+      padding: max(10px, env(safe-area-inset-top)) clamp(10px, 2vw, 28px) 10px;
+    }
+
+    .brand { grid-area: brand; }
+    .brand-mark { display: none !important; }
+    .brand-text {
+      display: inline !important;
+      font-size: clamp(1.15rem, 2vw, 1.55rem);
+      letter-spacing: -.055em;
+    }
+
+    .mode-bar {
+      grid-area: modes;
+      position: static;
+      inset: auto;
+      width: 100%;
+      height: auto;
+      min-width: 0;
+      justify-content: stretch;
+      gap: 4px;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+      border: 0;
+      backdrop-filter: none;
+    }
+    .mode-button {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 38px;
+      min-height: 38px;
+      padding-inline: clamp(8px, 1vw, 14px);
+      font-size: clamp(.72rem, .9vw, .86rem);
+      white-space: nowrap;
+    }
+    .topic-status { display: none !important; }
+
+    .search-form { grid-area: search; max-width: none; }
+    .search-input { height: 44px; padding-right: 96px; }
+    .search-submit { top: 4px; right: 4px; height: 36px; }
+    .search-clear {
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: 76px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(.9);
+      transition: opacity .18s, transform .18s, background .18s, color .18s;
+    }
+    .search-clear.visible { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
+    .search-clear:hover { color: var(--text); background: var(--surface-2); }
+    .search-clear svg { position: static; width: 17px; height: 17px; transform: none; }
+
+    .header-actions {
+      grid-area: actions;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 40px;
+      gap: 6px;
+    }
+    .header-actions .icon-button {
+      display: inline-grid !important;
+      width: 40px;
+      height: 40px;
+    }
+    .icon-button[aria-pressed="true"] {
+      color: white;
+      border-color: color-mix(in srgb, var(--primary-2) 45%, var(--primary));
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+    }
+
+    .feed { inset: var(--nav-h) 0 0; }
+    .feed-card { min-height: calc(100dvh - var(--nav-h)); }
+    .repo-shell {
+      min-height: min(720px, calc(100dvh - var(--nav-h) - 28px));
+      max-height: calc(100dvh - var(--nav-h) - 20px);
+    }
+
+    .topic-filter {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      width: 100%;
+      min-height: 46px;
+      margin: 2px 0 8px;
+      padding: 0 14px;
+      color: var(--text);
+      background: var(--surface-solid);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      outline: none;
+    }
+    .topic-filter:focus { border-color: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 15%, transparent); }
+    .selection-summary { margin-bottom: 14px; color: var(--muted); font-size: .82rem; font-weight: 750; }
+    .topic-grid { display: grid; gap: 18px; }
+    .topic-section { display: grid; gap: 9px; }
+    .topic-section h3 { margin: 0; color: var(--text); font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; }
+    .topic-section-options { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .music-panel {
+      position: fixed;
+      z-index: 80;
+      top: calc(var(--nav-h) + 10px);
+      right: max(10px, env(safe-area-inset-right));
+      width: min(370px, calc(100vw - 20px));
+      padding: 12px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 18px 7px 18px 7px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-10px) scale(.98);
+      transition: opacity .2s, transform .2s, visibility .2s;
+    }
+    .music-panel.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    .music-panel-header, .music-panel-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .music-panel-header { margin-bottom: 10px; }
+    .music-panel-header div { display: grid; gap: 2px; }
+    .music-panel-header span { color: var(--muted); font-size: .75rem; }
+    .mini-button {
+      min-height: 34px;
+      padding: 0 11px;
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .music-frame {
+      aspect-ratio: 16 / 9;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--muted);
+      background: #050207;
+      border: 1px solid var(--line);
+      border-radius: 13px 5px 13px 5px;
+    }
+    .music-frame iframe { width: 100%; height: 100%; border: 0; }
+    .music-frame p { padding: 16px; text-align: center; font-size: .84rem; }
+    .music-panel-actions { margin-top: 10px; }
+    .music-panel-actions .text-button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+    @media (max-width: 1180px) {
+      .app-header {
+        grid-template-columns: auto minmax(250px, 1fr) auto;
+        grid-template-areas:
+          "brand modes actions"
+          "search search search";
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app-header {
+        grid-template-columns: auto 1fr;
+        grid-template-areas:
+          "brand actions"
+          "search search"
+          "modes modes";
+        gap: 7px 8px;
+        padding: max(7px, env(safe-area-inset-top)) 8px 7px;
+      }
+      .brand-text { font-size: 1.12rem; }
+      .header-actions {
+        justify-self: end;
+        grid-auto-columns: 36px;
+        gap: 4px;
+      }
+      .header-actions .icon-button { width: 36px; height: 36px; border-radius: 11px; }
+      .header-actions .icon-button svg { width: 18px; height: 18px; }
+      .search-input { height: 42px; padding-right: 48px; border-radius: 12px; }
+      .search-submit { display: none; }
+      .search-clear { right: 7px; }
+      .mode-bar { width: 100%; gap: 3px; }
+      .mode-button { height: 34px; min-height: 34px; padding-inline: 5px; font-size: clamp(.68rem, 3vw, .78rem); }
+      .feed-card { padding: 8px; min-height: calc(100dvh - var(--nav-h)); }
+      .repo-shell {
+        min-height: calc(100dvh - var(--nav-h) - 16px);
+        max-height: calc(100dvh - var(--nav-h) - 16px);
+      }
+      .music-panel { top: calc(var(--nav-h) + 6px); right: 6px; width: calc(100vw - 12px); }
+    }
+
+    @media (max-width: 330px) {
+      .header-actions { grid-auto-columns: 33px; gap: 2px; }
+      .header-actions .icon-button { width: 33px; height: 33px; }
+      .brand-text { font-size: 1rem; }
+      .mode-button { font-size: .65rem; }
+    }
+
+    @media (orientation: landscape) and (max-height: 540px) {
+      .app-header {
+        grid-template-columns: auto minmax(245px, .8fr) minmax(220px, 1fr) auto;
+        grid-template-areas: "brand modes search actions";
+        padding-block: 5px;
+      }
+      .search-input { height: 38px; }
+      .mode-button { height: 32px; min-height: 32px; }
+      .header-actions { grid-auto-columns: 34px; }
+      .header-actions .icon-button { width: 34px; height: 34px; }
+    }
+
+
+
+    /* DedSec Project rotation and public GitHub star filtering */
+    .featured-card .repo-shell {
+      border-color: color-mix(in srgb, var(--primary) 58%, var(--primary-2) 18%);
+      box-shadow: 0 24px 90px color-mix(in srgb, var(--primary) 16%, transparent), var(--shadow);
+    }
+    .featured-card .repo-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, transparent), transparent 42%, color-mix(in srgb, var(--primary-2) 8%, transparent));
+    }
+    .featured-card .repo-main { position: relative; z-index: 1; min-height: 0; }
+    .featured-card .side-actions { z-index: 6; }
+    .featured-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      width: fit-content;
+      max-width: 100%;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--line));
+      border-radius: 999px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--primary) 11%, var(--surface-2));
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .featured-label img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+    .featured-note { max-width: 64ch; color: var(--muted); font-size: clamp(.78rem, 1vw, .9rem); line-height: 1.55; }
+    .github-star-settings {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+      margin: 14px 0 4px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px 7px 16px 7px;
+      background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+    }
+    .github-star-field { display: grid; gap: 6px; min-width: 0; }
+    .github-star-field label { font-size: .78rem; font-weight: 800; color: var(--text); }
+    .github-star-field input {
+      width: 100%;
+      min-width: 0;
+      min-height: 43px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px 5px 12px 5px;
+      color: var(--text);
+      background: var(--surface-solid);
+      outline: none;
+    }
+    .github-star-field input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
+    .github-star-help, .star-sync-status { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+    .star-sync-status { min-height: 1.1em; color: var(--primary-2); }
+    .promo-star-button[aria-pressed="true"] { opacity: .72; }
+
+    @media (max-width: 560px) {
+      .github-star-settings { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+      .github-star-settings .text-button { width: 100%; }
+      .featured-label { font-size: .66rem; }
+      .featured-note { font-size: .76rem; }
+      .featured-card .repo-main { height: 100%; min-height: 0; }
+    }
+
+    @media (max-width: 340px) {
+      body { min-width: 280px; }
+      .featured-label { max-width: calc(100vw - 44px); }
+      .featured-note { display: none; }
+      .github-star-settings { margin-inline: -2px; padding: 10px; }
+    }
+
+    @media (max-height: 590px) and (orientation: landscape) {
+      .featured-note { display: none; }
+      .featured-label { min-height: 26px; padding-block: 3px; }
+    }
+
+
+
+    /* Keep complete repository controls reachable on very small screens. */
+    @media (max-width: 760px) {
+      .feed-card:not(.intro-card) .repo-main {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .intro-card .repo-main {
+        position: relative;
+        inset: auto;
+        width: auto;
+        height: 100%;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .feed-card:not(.intro-card) .repo-actions {
+        flex-wrap: nowrap;
+      }
+      .feed-card:not(.intro-card) .repo-actions .primary-link {
+        min-width: 0;
+        flex: 1 1 0;
+        padding-inline: 10px;
+        font-size: .82rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .feed-card:not(.intro-card) .repo-actions .secondary-button {
+        width: 44px;
+        flex: 0 0 44px;
+      }
+    }
+
+
+    /* Stable scrolling: natural touch movement plus one-card desktop wheel steps. */
+    html { scroll-behavior: auto; }
+    .feed {
+      scroll-snap-type: y proximity;
+      scroll-behavior: smooth;
+      overscroll-behavior-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      scroll-padding-block: 2px;
+    }
+    .feed-card {
+      scroll-snap-stop: normal;
+      touch-action: pan-y;
+    }
+    .repo-main { overscroll-behavior-y: auto; }
+
+    @media (pointer: coarse) {
+      .feed { scroll-behavior: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .feed { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#feed">Skip to project feed</a>
+
+  <header class="app-header" id="appHeader">
+    <a class="brand" href="./" aria-label="TikDev home">
+      <span class="brand-text">TikDev</span>
+    </a>
+
+    <nav class="mode-bar" aria-label="Feed type">
+      <button class="mode-button active" type="button" data-mode="discover">Discover</button>
+      <button class="mode-button" type="button" data-mode="popular">Popular</button>
+      <button class="mode-button" type="button" data-mode="fresh">Fresh</button>
+      <button class="mode-button" type="button" data-mode="saved">Saved</button>
+      <span class="topic-status" id="topicStatus">All development topics</span>
+    </nav>
+
+    <form class="search-form" id="searchForm" role="search">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <label class="sr-only" for="searchInput">Search GitHub repositories</label>
+      <input class="search-input" id="searchInput" type="search" maxlength="160" autocomplete="off" spellcheck="false" list="searchSuggestions" placeholder="Search projects, topics, owners, languages…">
+      <datalist id="searchSuggestions">
+        <option value="cybersecurity language:python"></option>
+        <option value="#artificial-intelligence"></option>
+        <option value="owner:microsoft terminal"></option>
+        <option value="license:mit stars:>1000"></option>
+        <option value="dedsec1121fk/TikDev"></option>
+      </datalist>
+      <button class="search-clear" id="searchClear" type="button" aria-label="Clear search" title="Clear search">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+      </button>
+      <button class="search-submit" type="submit">Search</button>
+    </form>
+
+    <div class="header-actions">
+      <a class="icon-button" id="sourceRepositoryLink" href="https://github.com/dedsec1121fk/TikDev" target="_blank" rel="noopener noreferrer" aria-label="Open TikDev source repository" title="Source repository">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.58-.29-5.29-1.29-5.29-5.73 0-1.27.45-2.3 1.2-3.11-.12-.3-.52-1.48.11-3.07 0 0 .98-.31 3.16 1.19a10.9 10.9 0 0 1 5.75 0C17.02 4.92 18 5.23 18 5.23c.63 1.6.23 2.78.11 3.07.75.82 1.2 1.84 1.2 3.1 0 4.46-2.72 5.45-5.3 5.74.42.36.79 1.07.79 2.16v3.24c0 .31.2.67.8.56A11.5 11.5 0 0 0 12 .7Z"></path></svg>
+      </a>
+      <button class="icon-button" id="topicsButton" type="button" aria-label="Choose interests and categories" title="Interests and categories">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+      </button>
+      <button class="icon-button" id="musicButton" type="button" aria-label="Play background lofi music" aria-pressed="false" title="Background lofi music">
+        <svg id="musicIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle></svg>
+      </button>
+      <button class="icon-button" id="fullscreenButton" type="button" aria-label="Enter full screen" title="Enter full screen">
+        <svg id="fullscreenIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>
+      </button>
+      <button class="icon-button" id="themeButton" type="button" aria-label="Switch color theme" title="Switch color theme">
+        <svg id="themeIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c0-.5-.04-1-.12-1.47A7 7 0 0 1 12 3Z"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="feed" id="feed" tabindex="-1" aria-live="polite"></main>
+  <div class="position-indicator" id="positionIndicator" aria-hidden="true">1 / 1</div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <aside class="music-panel" id="musicPanel" aria-label="Background music player" aria-hidden="true">
+    <div class="music-panel-header">
+      <div>
+        <strong>Focus radio</strong>
+        <span>Official Lofi Girl stream</span>
+      </div>
+      <button class="mini-button" id="hideMusic" type="button" aria-label="Hide music player">Hide</button>
+    </div>
+    <div class="music-frame" id="musicFrame" aria-live="polite">
+      <p>Press the music button to start the stream.</p>
+    </div>
+    <div class="music-panel-actions">
+      <button class="text-button" id="stopMusic" type="button">Stop music</button>
+      <a class="text-button" href="https://www.youtube.com/@LofiGirl/streams" target="_blank" rel="noopener noreferrer">Open Lofi Girl live streams ↗</a>
+    </div>
+  </aside>
+
+  <dialog id="topicsDialog" aria-labelledby="topicsTitle">
+    <div class="modal-header">
+      <div>
+        <h2 id="topicsTitle">Choose your interests</h2>
+      </div>
+      <button class="icon-button" type="button" data-close="topicsDialog" aria-label="Close topic settings">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-copy">Choose categories to personalize Discover. Filter the list or select any combination; preferences stay only in this browser.</p>
+      <label class="sr-only" for="topicFilter">Filter interests and categories</label>
+      <input class="topic-filter" id="topicFilter" type="search" autocomplete="off" placeholder="Filter interests and categories…">
+      <section class="github-star-settings" aria-labelledby="githubStarSettingsTitle">
+        <div class="github-star-field">
+          <label id="githubStarSettingsTitle" for="githubUsername">GitHub username for star filtering</label>
+          <input id="githubUsername" type="text" maxlength="39" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Optional, for example octocat">
+        </div>
+        <button class="text-button" id="refreshStarStatus" type="button">Check stars</button>
+        <p class="github-star-help">TikDev uses only the public GitHub starred-repositories list. No password or access token is requested.</p>
+        <p class="star-sync-status" id="starSyncStatus" role="status" aria-live="polite"></p>
+      </section>
+      <div class="selection-summary" id="selectionSummary">0 selected</div>
+      <div class="topic-grid" id="topicGrid"></div>
+      <div class="modal-footer">
+        <button class="text-button" id="clearTopics" type="button">Clear all</button>
+        <button class="primary-link" id="saveTopics" type="button">Apply topics</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="readme-dialog" id="readmeDialog" aria-labelledby="readmeTitle">
+    <div class="modal-header">
+      <div>
+        <h2 id="readmeTitle">README</h2>
+        <div class="readme-meta" id="readmeMeta"></div>
+      </div>
+      <button class="icon-button" type="button" data-close="readmeDialog" aria-label="Close README">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+      </button>
+    </div>
+    <pre class="readme-content" id="readmeContent">Loading…</pre>
+  </dialog>
+
+  <script>
+    'use strict';
+
+    const API = 'https://api.github.com';
+    const ORIGINAL_REPOSITORY = 'dedsec1121fk/TikDev';
+    const DEPLOYMENT = Object.freeze({
+      repository: '__TIKDEV_REPOSITORY__',
+      siteUrl: '__TIKDEV_SITE_URL__',
+      customDomain: '__TIKDEV_CNAME__'
+    });
+    const PAGE_SIZE = 15;
+    const PROMOTED_REPOSITORIES = Object.freeze([
+      'dedsec1121fk/Corrupted-Files-Project',
+      'dedsec1121fk/Pocket-AI',
+      'dedsec1121fk/DedSec',
+      'dedsec1121fk/Offline-Survival-Project',
+      'dedsec1121fk/dedsec1121fk.github.io'
+    ]);
+    const PROMOTION_INTERVAL_MS = 3 * 60 * 1000;
+    const FIRST_PROMOTION_DELAY_MS = 2 * 60 * 1000;
+    const STAR_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+    const TOPIC_GROUPS = Object.freeze({
+      "Cybersecurity": [
+        "cybersecurity", "security", "ethical-hacking", "penetration-testing", "bug-bounty",
+        "osint", "digital-forensics", "reverse-engineering", "malware-analysis", "cryptography",
+        "privacy", "network-security", "web-security", "mobile-security", "ctf"
+      ],
+      "Artificial intelligence": [
+        "artificial-intelligence", "machine-learning", "deep-learning", "generative-ai",
+        "large-language-models", "natural-language-processing", "computer-vision", "chatbot",
+        "data-science", "data-visualization", "recommendation-system", "voice-assistant"
+      ],
+      "Web and apps": [
+        "web-development", "frontend", "backend", "full-stack", "api", "rest-api",
+        "progressive-web-app", "browser-extension", "mobile", "android", "ios", "desktop",
+        "accessibility", "ecommerce", "portfolio"
+      ],
+      "Programming languages": [
+        "python", "javascript", "typescript", "java", "kotlin", "swift", "go", "rust", "c",
+        "cpp", "csharp", "php", "ruby", "dart", "shell", "bash", "powershell", "lua"
+      ],
+      "Frameworks and runtimes": [
+        "react", "vue", "svelte", "angular", "nextjs", "nodejs", "deno", "django", "flask",
+        "fastapi", "spring-boot", "laravel", "flutter", "react-native", "electron"
+      ],
+      "Cloud and DevOps": [
+        "devops", "cloud", "docker", "kubernetes", "terraform", "ansible", "serverless",
+        "continuous-integration", "github-actions", "monitoring", "observability", "self-hosted",
+        "homelab", "linux", "windows", "macos"
+      ],
+      "Data and infrastructure": [
+        "database", "sql", "nosql", "postgresql", "mysql", "mongodb", "redis", "big-data",
+        "data-engineering", "web-scraping", "networking", "distributed-systems", "blockchain",
+        "web3", "internet-of-things"
+      ],
+      "Tools and automation": [
+        "automation", "cli", "terminal", "termux", "productivity", "developer-tools", "testing",
+        "code-quality", "documentation", "bots", "discord-bot", "telegram-bot", "open-source",
+        "beginner-friendly", "education"
+      ],
+      "Games, hardware and creative": [
+        "game-development", "unity", "unreal-engine", "godot", "graphics", "computer-graphics",
+        "audio", "music", "video", "creative-coding", "arduino", "raspberry-pi", "robotics",
+        "embedded-systems", "virtual-reality", "augmented-reality"
+      ],
+      "Science and society": [
+        "science", "healthcare", "finance", "climate", "geospatial", "bioinformatics",
+        "research", "civic-tech", "sustainability", "education-technology"
+      ]
+    });
+    const TOPICS = Object.freeze([...new Set(Object.values(TOPIC_GROUPS).flat())]);
+
+    const LANGUAGE_COLORS = {
+      JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', Java: '#b07219',
+      Kotlin: '#A97BFF', Swift: '#F05138', Go: '#00ADD8', Rust: '#dea584', C: '#555555',
+      'C++': '#f34b7d', 'C#': '#178600', PHP: '#4F5D95', Ruby: '#701516', Dart: '#00B4AB',
+      Shell: '#89e051', HTML: '#e34c26', CSS: '#563d7c', Svelte: '#ff3e00', Vue: '#41b883'
+    };
+
+    const icons = {
+      external: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>',
+      book: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"></path><path d="M8 7h8M8 11h6"></path></svg>',
+      star: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.2L5.8 21 7 14.2l-5-4.9 6.9-1L12 2Z"></path></svg>',
+      fork: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="4" r="2"></circle><circle cx="18" cy="4" r="2"></circle><circle cx="12" cy="20" r="2"></circle><path d="M6 6v3c0 2 2 3 6 3s6-1 6-3V6M12 12v6"></path></svg>',
+      share: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"></path></svg>',
+      bookmark: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4V3Z"></path></svg>',
+      refresh: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6v5h-5M4 18v-5h5"></path><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"></path></svg>',
+      alert: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.5 2.2 18a2 2 0 0 0 1.8 3h16a2 2 0 0 0 1.8-3L13.7 3.5a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4M12 17h.01"></path></svg>'
+    };
+
+    const state = {
+      mode: 'discover',
+      query: '',
+      page: 1,
+      loading: false,
+      exhausted: false,
+      repositories: [],
+      seen: new Set(),
+      selectedTopics: new Set(readJson('tikdev-topics', [])),
+      draftTopics: new Set(),
+      saved: new Set(readJson('tikdev-saved', [])),
+      activeIndex: 0,
+      topicCursor: 0,
+      requestId: 0,
+      githubUsername: readText('tikdev-github-username'),
+      starredPromoted: new Set(readJson('tikdev-promoted-starred', []).map(value => String(value).toLowerCase())),
+      promotedRepositories: new Map(),
+      promotionCursor: Number(localStorage.getItem('tikdev-promotion-cursor') || 0) || 0,
+      promotionTimer: 0,
+      promotionBusy: false
+    };
+
+    const feed = document.getElementById('feed');
+    const searchForm = document.getElementById('searchForm');
+    const searchInput = document.getElementById('searchInput');
+    const searchClear = document.getElementById('searchClear');
+    const appHeader = document.getElementById('appHeader');
+    const topicStatus = document.getElementById('topicStatus');
+    const positionIndicator = document.getElementById('positionIndicator');
+    const topicsDialog = document.getElementById('topicsDialog');
+    const topicGrid = document.getElementById('topicGrid');
+    const topicFilter = document.getElementById('topicFilter');
+    const selectionSummary = document.getElementById('selectionSummary');
+    const readmeDialog = document.getElementById('readmeDialog');
+    const readmeTitle = document.getElementById('readmeTitle');
+    const readmeMeta = document.getElementById('readmeMeta');
+    const readmeContent = document.getElementById('readmeContent');
+    const toast = document.getElementById('toast');
+    const sourceRepositoryLink = document.getElementById('sourceRepositoryLink');
+    const canonicalUrl = document.getElementById('canonicalUrl');
+    const openGraphUrl = document.getElementById('openGraphUrl');
+    const musicButton = document.getElementById('musicButton');
+    const musicIcon = document.getElementById('musicIcon');
+    const musicPanel = document.getElementById('musicPanel');
+    const musicFrame = document.getElementById('musicFrame');
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    const fullscreenIcon = document.getElementById('fullscreenIcon');
+    const githubUsernameInput = document.getElementById('githubUsername');
+    const refreshStarStatusButton = document.getElementById('refreshStarStatus');
+    const starSyncStatus = document.getElementById('starSyncStatus');
+    const openGraphImage = document.getElementById('openGraphImage');
+    const twitterImage = document.getElementById('twitterImage');
+
+    function injectedValue(value) {
+      const text = String(value || '').trim();
+      return /^__TIKDEV_[A-Z_]+__$/.test(text) ? '' : text;
+    }
+
+    function validRepository(value) {
+      return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9._-]{1,100}$/.test(value);
+    }
+
+    function normalizeSiteUrl(value) {
+      try {
+        const url = new URL(value);
+        if (!['http:', 'https:'].includes(url.protocol)) return '';
+        url.hash = '';
+        url.search = '';
+        if (!url.pathname.endsWith('/')) url.pathname += '/';
+        return url.href;
+      } catch { return ''; }
+    }
+
+    function inferGithubPagesRepository() {
+      const host = location.hostname.toLowerCase();
+      if (!host.endsWith('.github.io')) return '';
+      const owner = host.slice(0, -'.github.io'.length);
+      if (!owner) return '';
+      const firstPathPart = location.pathname.split('/').filter(Boolean)[0];
+      const repository = firstPathPart || `${owner}.github.io`;
+      return `${owner}/${repository}`;
+    }
+
+    function inferCurrentSiteUrl(repository) {
+      if (!['http:', 'https:'].includes(location.protocol)) return '';
+      const host = location.hostname.toLowerCase();
+      if (!host.endsWith('.github.io')) return `${location.origin}/`;
+
+      const [owner, repositoryName] = String(repository || '').split('/');
+      if (!owner || !repositoryName) return `${location.origin}/`;
+      const isAccountSite = repositoryName.toLowerCase() === `${owner}.github.io`.toLowerCase();
+      return isAccountSite ? `${location.origin}/` : `${location.origin}/${repositoryName}/`;
+    }
+
+    const injectedRepository = injectedValue(DEPLOYMENT.repository);
+    const REPOSITORY = validRepository(injectedRepository)
+      ? injectedRepository
+      : (inferGithubPagesRepository() || ORIGINAL_REPOSITORY);
+    let SITE_URL = normalizeSiteUrl(injectedValue(DEPLOYMENT.siteUrl)) || inferCurrentSiteUrl(REPOSITORY);
+    let CUSTOM_DOMAIN = injectedValue(DEPLOYMENT.customDomain);
+
+    function applyDeploymentMetadata() {
+      const repositoryUrl = `https://github.com/${REPOSITORY}`;
+      sourceRepositoryLink.href = repositoryUrl;
+      sourceRepositoryLink.setAttribute('aria-label', `Open ${REPOSITORY} on GitHub`);
+      sourceRepositoryLink.title = REPOSITORY;
+
+      if (SITE_URL) {
+        canonicalUrl.href = SITE_URL;
+        openGraphUrl.setAttribute('content', SITE_URL);
+      }
+
+      const imageBase = SITE_URL || document.baseURI;
+      const previewImage = new URL('dedsec-butterfly.png', imageBase).href;
+      if (!openGraphImage.content || openGraphImage.content.startsWith('__TIKDEV_')) openGraphImage.content = previewImage;
+      if (!twitterImage.content || twitterImage.content.startsWith('__TIKDEV_')) twitterImage.content = previewImage;
+
+      window.__TIKDEV_SITE__ = Object.freeze({
+        repository: REPOSITORY,
+        repositoryUrl,
+        siteUrl: SITE_URL,
+        customDomain: CUSTOM_DOMAIN || null
+      });
+    }
+
+    function validCname(value) {
+      const domain = String(value || '').trim().toLowerCase().replace(/\.$/, '');
+      return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])$/.test(domain)
+        ? domain
+        : '';
+    }
+
+    async function detectPublishedCname() {
+      const injectedCname = validCname(CUSTOM_DOMAIN);
+      if (injectedCname) {
+        CUSTOM_DOMAIN = injectedCname;
+        SITE_URL = `https://${injectedCname}/`;
+        applyDeploymentMetadata();
+        return;
+      }
+
+      try {
+        const cnameUrl = new URL('CNAME', SITE_URL || document.baseURI);
+        const response = await fetch(cnameUrl, { cache: 'no-store', headers: { Accept: 'text/plain' } });
+        if (!response.ok) return;
+        const detected = validCname((await response.text()).split(/\r?\n/, 1)[0]);
+        if (!detected) return;
+        CUSTOM_DOMAIN = detected;
+        SITE_URL = `https://${detected}/`;
+        applyDeploymentMetadata();
+      } catch { /* CNAME is optional */ }
+    }
+
+    applyDeploymentMetadata();
+    detectPublishedCname();
+
+    function readJson(key, fallback) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return Array.isArray(value) ? value : fallback;
+      } catch { return fallback; }
+    }
+
+    function writeJson(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
+    }
+
+    function readObject(key, fallback = {}) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+      } catch { return fallback; }
+    }
+
+    function readText(key) {
+      try { return String(localStorage.getItem(key) || '').trim(); } catch { return ''; }
+    }
+
+    function escapeHtml(value = '') {
+      return String(value).replace(/[&<>'"]/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      })[char]);
+    }
+
+    function safeGithubUrl(value, fallback = 'https://github.com') {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && (url.hostname === 'github.com' || url.hostname.endsWith('.github.com'))
+          ? url.href : fallback;
+      } catch { return fallback; }
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+    }
+
+    function relativeDate(dateValue) {
+      const time = new Date(dateValue).getTime();
+      if (!Number.isFinite(time)) return 'Recently updated';
+      const seconds = Math.max(1, Math.floor((Date.now() - time) / 1000));
+      const units = [
+        ['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]
+      ];
+      for (const [unit, amount] of units) {
+        if (seconds >= amount) return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-Math.floor(seconds / amount), unit);
+      }
+      return 'just now';
+    }
+
+    function dateDaysAgo(days) {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() - days);
+      return date.toISOString().slice(0, 10);
+    }
+
+    function updateTopicStatus() {
+      const topics = [...state.selectedTopics];
+      topicStatus.textContent = topics.length ? topics.map(prettyTopic).join(' · ') : 'All development topics';
+    }
+
+    function prettyTopic(topic) {
+      return String(topic).replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function setMode(mode) {
+      if (!['discover', 'popular', 'fresh', 'saved'].includes(mode)) return;
+      state.mode = mode;
+      document.querySelectorAll('.mode-button').forEach(button => {
+        button.classList.toggle('active', button.dataset.mode === mode);
+      });
+      resetAndLoad();
+    }
+
+    function directRepositoryFromQuery(value) {
+      const raw = String(value || '').trim();
+      const urlMatch = raw.match(/^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})(?:[\/?#].*)?$/i);
+      const shortMatch = raw.match(/^@?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})$/);
+      const match = urlMatch || shortMatch;
+      return match ? `${match[1]}/${match[2].replace(/\.git$/i, '')}` : '';
+    }
+
+    function normalizeSearchQuery(value) {
+      let raw = String(value || '').trim().replace(/[<>]/g, ' ').slice(0, 160);
+      if (!raw) return '';
+      raw = raw
+        .replace(/(^|\s)#([a-z0-9][a-z0-9-]*)/gi, '$1topic:$2')
+        .replace(/(^|\s)owner:/gi, '$1user:')
+        .replace(/(^|\s)lang:/gi, '$1language:')
+        .replace(/(^|\s)@([A-Za-z0-9-]{1,39})(?=\s|$)/g, '$1user:$2');
+
+      const tokens = raw.match(/"[^"]+"|\S+/g) || [];
+      const qualifiers = [];
+      const terms = [];
+      const qualifierPattern = /^(?:user|org|topic|language|license|stars|forks|size|created|pushed|archived|fork|mirror|template|good-first-issues|help-wanted-issues):/i;
+
+      for (const token of tokens) {
+        if (qualifierPattern.test(token)) qualifiers.push(token);
+        else terms.push(token);
+      }
+
+      const termQuery = terms.join(' ');
+      return [termQuery, termQuery ? 'in:name,description,readme' : '', qualifiers.join(' ')].filter(Boolean).join(' ');
+    }
+
+    function buildSearch() {
+      const topicList = [...state.selectedTopics];
+      const chosenTopic = topicList.length ? topicList[state.topicCursor++ % topicList.length] : '';
+      const normalizedQuery = normalizeSearchQuery(state.query);
+      let qualifiers = 'fork:false archived:false';
+      let sort = '';
+
+      if (normalizedQuery) {
+        // Keep typed searches broad and relevance-ranked. Users can add GitHub qualifiers directly.
+      } else if (state.mode === 'popular') {
+        qualifiers += ' stars:>1000';
+        sort = 'stars';
+      } else if (state.mode === 'fresh') {
+        qualifiers += ` created:>=${dateDaysAgo(120)} stars:>3`;
+        sort = 'updated';
+      } else {
+        qualifiers += ` pushed:>=${dateDaysAgo(365)} stars:>25`;
+        sort = 'stars';
+      }
+
+      if (!normalizedQuery && chosenTopic) qualifiers += ` topic:${chosenTopic}`;
+      const q = [normalizedQuery, qualifiers].filter(Boolean).join(' ');
+      const params = new URLSearchParams({ q, order: 'desc', per_page: String(PAGE_SIZE), page: String(state.page) });
+      if (sort) params.set('sort', sort);
+      return `${API}/search/repositories?${params.toString()}`;
+    }
+
+    function introCard() {
+      return `
+        <section class="feed-card intro-card" data-kind="intro" aria-label="Welcome to TikDev">
+          <article class="repo-shell">
+            <div class="repo-main">
+              <span class="eyebrow">Open-source discovery, simplified</span>
+              <h1 class="repo-title">Swipe less.<br>Discover more.</h1>
+              <p class="repo-description">TikDev turns public GitHub repositories into a clean, vertical feed. Search directly, choose interests, save interesting projects, and open their README without leaving the page.</p>
+              <div class="repo-actions">
+                <button class="primary-link" type="button" data-action="next">Start exploring ${icons.external}</button>
+                <button class="secondary-button" type="button" data-action="open-topics">Choose interests</button>
+              </div>
+            </div>
+          </article>
+        </section>`;
+    }
+
+    function loadingCard() {
+      return `
+        <section class="feed-card status-card" data-kind="loading" aria-label="Loading repositories">
+          <article class="repo-shell">
+            <div class="repo-main">
+              <div class="skeleton" style="width:44px;height:44px"></div>
+              <div class="skeleton" style="width:min(78%,620px);height:74px"></div>
+              <div class="skeleton" style="width:min(92%,760px);height:22px"></div>
+              <div class="skeleton" style="width:min(70%,560px);height:22px"></div>
+              <div class="card-spacer"></div>
+              <div class="skeleton" style="width:180px;height:45px"></div>
+            </div>
+          </article>
+        </section>`;
+    }
+
+    function messageCard(title, message, actionLabel = 'Try again') {
+      return `
+        <section class="feed-card status-card" data-kind="message">
+          <article class="repo-shell">
+            <div class="repo-main">
+              <div class="status-icon">${icons.alert}</div>
+              <h1 class="repo-title" style="font-size:clamp(2rem,5vw,4rem)">${escapeHtml(title)}</h1>
+              <p class="repo-description">${escapeHtml(message)}</p>
+              <div class="repo-actions">
+                <button class="primary-link" type="button" data-action="retry">${escapeHtml(actionLabel)} ${icons.refresh}</button>
+              </div>
+            </div>
+          </article>
+        </section>`;
+    }
+
+    function repoCard(repo) {
+      const fullNameRaw = repo.full_name;
+      const fullName = escapeHtml(fullNameRaw);
+      const repoUrl = safeGithubUrl(repo.html_url);
+      const starUrl = `${repoUrl}/stargazers`;
+      const forkUrl = `${repoUrl}/fork`;
+      const language = repo.language ? escapeHtml(repo.language) : 'Unknown';
+      const langColor = LANGUAGE_COLORS[repo.language] || '#8b95a7';
+      const topics = (repo.topics || []).slice(0, 6);
+      const isSaved = state.saved.has(fullNameRaw);
+      const isPromoted = Boolean(repo.__tikdevPromoted);
+      const isKnownStarred = state.starredPromoted.has(fullNameRaw.toLowerCase());
+      const license = repo.license && repo.license.spdx_id && repo.license.spdx_id !== 'NOASSERTION' ? repo.license.spdx_id : null;
+      const homepage = repo.homepage && /^https:\/\//i.test(repo.homepage) ? repo.homepage : null;
+
+      return `
+        <section class="feed-card ${isPromoted ? 'featured-card' : ''}" data-kind="repo" data-repo="${fullName}" ${isPromoted ? 'data-promoted="true" aria-label="DedSec Project featured repository"' : ''}>
+          <article class="repo-shell">
+            <div class="repo-main">
+              ${isPromoted ? '<span class="featured-label"><img src="dedsec-butterfly.png" alt="" width="18" height="18">DedSec Project pick</span>' : ''}
+              <div class="repo-topline">
+                <img class="avatar" src="${escapeHtml(repo.owner.avatar_url)}" alt="" width="44" height="44" loading="lazy">
+                <div class="owner-block">
+                  <span class="owner-name">${escapeHtml(repo.owner.login)} /</span>
+                  <span class="updated">Updated ${escapeHtml(relativeDate(repo.pushed_at || repo.updated_at))}</span>
+                </div>
+              </div>
+
+              <h2 class="repo-title">${escapeHtml(repo.name)}</h2>
+              <p class="repo-description">${escapeHtml(repo.description || 'No repository description has been provided yet.')}</p>
+              ${isPromoted ? '<p class="featured-note">Featured periodically even when it is outside your selected interests. Repositories already identified as starred are excluded.</p>' : ''}
+
+              <div class="repo-meta">
+                <span class="pill"><span class="language-dot" style="--lang:${langColor}"></span>${language}</span>
+                ${license ? `<span class="pill">${escapeHtml(license)}</span>` : ''}
+                ${repo.open_issues_count ? `<span class="pill">${formatNumber(repo.open_issues_count)} open issues</span>` : ''}
+                ${homepage ? `<a class="pill" href="${escapeHtml(homepage)}" target="_blank" rel="noopener noreferrer">Website ↗</a>` : ''}
+              </div>
+
+              ${topics.length ? `<div class="topics">${topics.map(topic => `<button class="pill topic-pill" type="button" data-action="topic" data-topic="${escapeHtml(topic)}">#${escapeHtml(topic)}</button>`).join('')}</div>` : ''}
+
+              <div class="card-spacer"></div>
+
+              <div class="repo-actions">
+                <a class="primary-link" href="${repoUrl}" target="_blank" rel="noopener noreferrer">Open repository ${icons.external}</a>
+                <button class="secondary-button" type="button" data-action="readme" data-repo="${fullName}">${icons.book}<span class="button-label">README</span></button>
+                <button class="secondary-button" type="button" data-action="save" data-repo="${fullName}" aria-pressed="${isSaved}">${icons.bookmark}<span class="button-label">${isSaved ? 'Saved' : 'Save'}</span></button>
+              </div>
+            </div>
+
+            <aside class="side-actions" aria-label="Repository actions">
+              ${isPromoted ? `<button class="stat-action promo-star-button" type="button" data-action="promo-star" data-repo="${fullName}" aria-pressed="${isKnownStarred}" aria-label="${isKnownStarred ? 'Star recorded for' : 'Open GitHub to star'} ${fullNameRaw}; ${repo.stargazers_count} stars" title="${formatNumber(repo.stargazers_count)} stars">
+                <span class="stat-icon star-icon">${icons.star}</span>
+                <span class="button-label">${isKnownStarred ? 'Recorded' : 'Star'}</span>
+              </button>` : `<a class="stat-action" href="${starUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${repo.stargazers_count} stars">
+                <span class="stat-icon star-icon">${icons.star}</span>
+                <span>${formatNumber(repo.stargazers_count)}</span>
+              </a>`}
+              <a class="stat-action" href="${forkUrl}" target="_blank" rel="noopener noreferrer" aria-label="Fork repository; ${repo.forks_count} forks">
+                <span class="stat-icon fork-icon">${icons.fork}</span>
+                <span>${formatNumber(repo.forks_count)}</span>
+              </a>
+              <button class="stat-action" type="button" data-action="share" data-repo="${fullName}" aria-label="Share ${escapeHtml(repo.name)}">
+                <span class="stat-icon">${icons.share}</span>
+                <span>Share</span>
+              </button>
+            </aside>
+          </article>
+        </section>`;
+    }
+
+    function renderInitial() {
+      feed.innerHTML = introCard() + loadingCard();
+      observeCards();
+      updatePosition();
+    }
+
+    function renderSaved() {
+      const savedRepos = state.repositories.filter(repo => state.saved.has(repo.full_name));
+      const cached = readJson('tikdev-saved-repos', []).filter(repo => state.saved.has(repo.full_name));
+      const combined = [...savedRepos, ...cached.filter(repo => !savedRepos.some(item => item.full_name === repo.full_name))];
+      state.repositories = combined;
+      feed.innerHTML = introCard() + (combined.length
+        ? combined.map(repoCard).join('')
+        : messageCard('Nothing saved yet', 'Save repositories from Discover, Popular, or Fresh and they will appear here.', 'Browse projects'));
+      observeCards();
+      updatePosition();
+    }
+
+    async function resetAndLoad() {
+      state.requestId += 1;
+      state.page = 1;
+      state.loading = false;
+      state.exhausted = false;
+      state.repositories = [];
+      state.seen.clear();
+      state.activeIndex = 0;
+      feed.scrollTo({ top: 0, behavior: 'instant' });
+
+      if (state.mode === 'saved') {
+        renderSaved();
+        return;
+      }
+
+      renderInitial();
+      await loadMore(true, state.requestId);
+    }
+
+    async function loadMore(replaceLoading = false, requestId = state.requestId) {
+      if (state.loading || state.exhausted || state.mode === 'saved') return;
+      state.loading = true;
+
+      try {
+        const directRepository = state.page === 1 ? directRepositoryFromQuery(state.query) : '';
+        const requestUrl = directRepository
+          ? `${API}/repos/${directRepository.split('/').map(encodeURIComponent).join('/')}`
+          : buildSearch();
+        const response = await fetch(requestUrl, {
+          headers: { Accept: 'application/vnd.github+json' }
+        });
+
+        if (requestId !== state.requestId) return;
+
+        if (!response.ok) {
+          if (response.status === 403) {
+            const reset = response.headers.get('x-ratelimit-reset');
+            const resetText = reset ? new Date(Number(reset) * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'a few minutes';
+            throw new Error(`GitHub's public API limit was reached. Try again after ${resetText}.`);
+          }
+          if (response.status === 404 && directRepository) throw new Error('That GitHub repository could not be found or is not public.');
+          if (response.status === 422) throw new Error('GitHub could not understand that search. Try fewer words or check the qualifiers.');
+          throw new Error(`GitHub returned error ${response.status}.`);
+        }
+
+        const data = await response.json();
+        const rawItems = directRepository ? [data] : (data.items || []);
+        const items = rawItems.filter(repo => repo && repo.full_name && !state.seen.has(repo.full_name));
+        items.forEach(repo => state.seen.add(repo.full_name));
+        state.repositories.push(...items);
+        state.exhausted = Boolean(directRepository) || items.length < PAGE_SIZE || state.repositories.length >= Math.min(data.total_count || 1000, 1000);
+        state.page += 1;
+
+        const loadingNode = feed.querySelector('[data-kind="loading"]');
+        if (loadingNode) loadingNode.remove();
+
+        if (!state.repositories.length) {
+          feed.insertAdjacentHTML('beforeend', messageCard('No projects found', 'Try another search, qualifier, owner, language, or interest filter.', 'Clear search'));
+        } else {
+          const fragment = document.createElement('div');
+          fragment.innerHTML = items.map(repoCard).join('');
+          while (fragment.firstElementChild) feed.appendChild(fragment.firstElementChild);
+          if (!state.exhausted) feed.insertAdjacentHTML('beforeend', loadingCard());
+        }
+
+        observeCards();
+        updatePosition();
+      } catch (error) {
+        if (requestId !== state.requestId) return;
+        const loadingNode = feed.querySelector('[data-kind="loading"]');
+        if (loadingNode) loadingNode.outerHTML = messageCard('Could not load GitHub', error.message || 'Check your connection and try again.');
+        observeCards();
+      } finally {
+        state.loading = false;
+      }
+    }
+
+    let observer;
+    function observeCards() {
+      if (observer) observer.disconnect();
+      observer = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < .58) continue;
+          const cards = [...feed.querySelectorAll('.feed-card')];
+          state.activeIndex = cards.indexOf(entry.target);
+          updatePosition();
+          const loadingIndex = cards.findIndex(card => card.dataset.kind === 'loading');
+          if (loadingIndex >= 0 && state.activeIndex >= loadingIndex - 2) loadMore(false, state.requestId);
+        }
+      }, { root: feed, threshold: [.58] });
+      feed.querySelectorAll('.feed-card').forEach(card => observer.observe(card));
+    }
+
+    function updatePosition() {
+      const cards = [...feed.querySelectorAll('.feed-card')].filter(card => card.dataset.kind !== 'loading');
+      const visibleIndex = Math.min(state.activeIndex + 1, Math.max(1, cards.length));
+      positionIndicator.textContent = `${visibleIndex} / ${Math.max(1, cards.length)}`;
+    }
+
+    function nearestCardIndex(cards = [...feed.querySelectorAll('.feed-card')]) {
+      if (!cards.length) return 0;
+      const feedTop = feed.getBoundingClientRect().top;
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+      cards.forEach((card, index) => {
+        const distance = Math.abs(card.getBoundingClientRect().top - feedTop);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+      return closestIndex;
+    }
+
+    function scrollToCard(offset) {
+      const cards = [...feed.querySelectorAll('.feed-card')];
+      if (!cards.length) return;
+      const current = nearestCardIndex(cards);
+      const target = Math.max(0, Math.min(cards.length - 1, current + offset));
+      state.activeIndex = target;
+      cards[target].scrollIntoView({
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    }
+
+    function scrollableAncestorCanMove(start, deltaY) {
+      let node = start instanceof Element ? start : null;
+      while (node && node !== feed) {
+        const style = getComputedStyle(node);
+        const canScroll = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2;
+        if (canScroll) {
+          const hasRoomDown = node.scrollTop + node.clientHeight < node.scrollHeight - 2;
+          const hasRoomUp = node.scrollTop > 2;
+          if ((deltaY > 0 && hasRoomDown) || (deltaY < 0 && hasRoomUp)) return true;
+        }
+        node = node.parentElement;
+      }
+      return false;
+    }
+
+    let wheelDistance = 0;
+    let wheelResetTimer = 0;
+    let wheelLocked = false;
+    const finePointer = matchMedia('(pointer: fine)');
+
+    feed.addEventListener('wheel', event => {
+      if (!finePointer.matches || event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      if (scrollableAncestorCanMove(event.target, event.deltaY)) return;
+
+      event.preventDefault();
+      if (wheelLocked) return;
+
+      const multiplier = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? feed.clientHeight
+        : 1;
+      wheelDistance += event.deltaY * multiplier;
+
+      clearTimeout(wheelResetTimer);
+      wheelResetTimer = window.setTimeout(() => { wheelDistance = 0; }, 180);
+
+      if (Math.abs(wheelDistance) < 90) return;
+      const direction = wheelDistance > 0 ? 1 : -1;
+      wheelDistance = 0;
+      wheelLocked = true;
+      scrollToCard(direction);
+      window.setTimeout(() => { wheelLocked = false; }, 520);
+    }, { passive: false });
+
+    function findRepo(fullName) {
+      return state.repositories.find(repo => repo.full_name === fullName)
+        || state.promotedRepositories.get(fullName)
+        || readJson('tikdev-saved-repos', []).find(repo => repo.full_name === fullName);
+    }
+
+    async function openReadme(fullName) {
+      const repo = findRepo(fullName);
+      if (!repo) return;
+      readmeTitle.textContent = repo.name;
+      readmeMeta.textContent = `${repo.full_name} · default branch: ${repo.default_branch}`;
+      readmeContent.textContent = 'Loading README…';
+      readmeDialog.showModal();
+
+      try {
+        const response = await fetch(`${API}/repos/${encodeURIComponent(repo.owner.login)}/${encodeURIComponent(repo.name)}/readme`, {
+          headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!response.ok) throw new Error(response.status === 404 ? 'This repository does not have a README.' : `GitHub returned error ${response.status}.`);
+        const data = await response.json();
+        const cleanBase64 = String(data.content || '').replace(/\s/g, '');
+        const bytes = Uint8Array.from(atob(cleanBase64), char => char.charCodeAt(0));
+        const text = new TextDecoder().decode(bytes);
+        readmeContent.textContent = text.slice(0, 80000) || 'The README is empty.';
+      } catch (error) {
+        readmeContent.textContent = error.message || 'Could not load this README.';
+      }
+    }
+
+    function saveRepo(fullName) {
+      const repo = findRepo(fullName);
+      if (!repo) return;
+      if (state.saved.has(fullName)) {
+        state.saved.delete(fullName);
+        showToast('Removed from saved projects');
+      } else {
+        state.saved.add(fullName);
+        showToast('Saved in this browser');
+      }
+      writeJson('tikdev-saved', [...state.saved]);
+      const cached = readJson('tikdev-saved-repos', []).filter(item => item.full_name !== fullName);
+      if (state.saved.has(fullName)) cached.unshift(repo);
+      writeJson('tikdev-saved-repos', cached.slice(0, 50));
+
+      document.querySelectorAll(`[data-action="save"][data-repo="${CSS.escape(fullName)}"]`).forEach(button => {
+        button.setAttribute('aria-pressed', String(state.saved.has(fullName)));
+        const label = button.querySelector('.button-label');
+        if (label) label.textContent = state.saved.has(fullName) ? 'Saved' : 'Save';
+      });
+    }
+
+    async function shareRepo(fullName) {
+      const repo = findRepo(fullName);
+      if (!repo) return;
+      const data = { title: `${repo.full_name} on GitHub`, text: repo.description || `Check out ${repo.full_name}`, url: repo.html_url };
+      try {
+        if (navigator.share) await navigator.share(data);
+        else {
+          await navigator.clipboard.writeText(repo.html_url);
+          showToast('Repository link copied');
+        }
+      } catch (error) {
+        if (error && error.name !== 'AbortError') showToast('Sharing was not available');
+      }
+    }
+
+    function renderTopicChoices(filter = topicFilter.value) {
+      const needle = String(filter || '').trim().toLowerCase();
+      const sections = [];
+
+      for (const [group, topics] of Object.entries(TOPIC_GROUPS)) {
+        const visible = topics.filter(topic => !needle || `${group} ${prettyTopic(topic)}`.toLowerCase().includes(needle));
+        if (!visible.length) continue;
+        sections.push(`
+          <section class="topic-section">
+            <h3>${escapeHtml(group)}</h3>
+            <div class="topic-section-options">
+              ${visible.map(topic => `
+                <button class="topic-choice ${state.draftTopics.has(topic) ? 'selected' : ''}" type="button" data-topic-choice="${topic}" aria-pressed="${state.draftTopics.has(topic)}">${escapeHtml(prettyTopic(topic))}</button>
+              `).join('')}
+            </div>
+          </section>`);
+      }
+
+      topicGrid.innerHTML = sections.join('') || '<p class="modal-copy">No matching categories.</p>';
+      selectionSummary.textContent = `${state.draftTopics.size} selected`;
+    }
+
+    function openTopics() {
+      state.draftTopics = new Set(state.selectedTopics);
+      topicFilter.value = '';
+      githubUsernameInput.value = state.githubUsername;
+      updateStarSyncStatus();
+      renderTopicChoices('');
+      topicsDialog.showModal();
+      requestAnimationFrame(() => topicFilter.focus());
+    }
+
+    function normalizeRepositoryName(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function sanitizeGithubUsername(value) {
+      const username = String(value || '').trim().replace(/^@/, '');
+      return /^(?!-)(?!.*--)[A-Za-z0-9-]{1,39}(?<!-)$/.test(username) ? username : '';
+    }
+
+    function updateStarSyncStatus(message = '') {
+      if (message) {
+        starSyncStatus.textContent = message;
+        return;
+      }
+      if (!state.githubUsername) {
+        starSyncStatus.textContent = 'Add a public GitHub username to automatically exclude repositories that account has starred.';
+        return;
+      }
+      const count = PROMOTED_REPOSITORIES.filter(repo => state.starredPromoted.has(normalizeRepositoryName(repo))).length;
+      starSyncStatus.textContent = `${count} of ${PROMOTED_REPOSITORIES.length} featured repositories are currently excluded for @${state.githubUsername}.`;
+    }
+
+    function parseLastPage(linkHeader) {
+      const match = String(linkHeader || '').match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+      return match ? Math.max(1, Number(match[1]) || 1) : 1;
+    }
+
+    async function fetchStarredPromotionMatches(username) {
+      const matched = new Set();
+      const target = new Set(PROMOTED_REPOSITORIES.map(normalizeRepositoryName));
+      const firstUrl = `${API}/users/${encodeURIComponent(username)}/starred?per_page=100&page=1&sort=created&direction=desc`;
+      const firstResponse = await fetch(firstUrl, { headers: { Accept: 'application/vnd.github+json' } });
+      if (firstResponse.status === 404) throw new Error('That public GitHub username was not found.');
+      if (!firstResponse.ok) throw new Error(firstResponse.status === 403 ? 'GitHub API limit reached; try the star check again later.' : `GitHub returned error ${firstResponse.status}.`);
+
+      const inspect = repos => {
+        for (const repo of repos || []) {
+          const name = normalizeRepositoryName(repo && repo.full_name);
+          if (target.has(name)) matched.add(name);
+        }
+      };
+
+      const firstItems = await firstResponse.json();
+      inspect(firstItems);
+      const lastPage = parseLastPage(firstResponse.headers.get('link'));
+      if (matched.size === target.size || lastPage <= 1) return matched;
+
+      const pages = new Set();
+      if (lastPage <= 8) {
+        for (let page = 2; page <= lastPage; page += 1) pages.add(page);
+      } else {
+        [2, 3, 4, lastPage - 2, lastPage - 1, lastPage].forEach(page => {
+          if (page > 1 && page <= lastPage) pages.add(page);
+        });
+      }
+
+      for (const page of pages) {
+        if (matched.size === target.size) break;
+        const response = await fetch(`${API}/users/${encodeURIComponent(username)}/starred?per_page=100&page=${page}&sort=created&direction=desc`, {
+          headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!response.ok) continue;
+        inspect(await response.json());
+      }
+      return matched;
+    }
+
+    function removeStarredPromotionCards() {
+      feed.querySelectorAll('[data-promoted="true"]').forEach(card => {
+        if (state.starredPromoted.has(normalizeRepositoryName(card.dataset.repo))) {
+          state.promotedRepositories.delete(card.dataset.repo);
+          card.remove();
+        }
+      });
+      observeCards();
+      updatePosition();
+    }
+
+    async function refreshPromotedStarStatus(force = false) {
+      const username = sanitizeGithubUsername(state.githubUsername);
+      const locallyRecorded = new Set(readJson('tikdev-promoted-starred', []).map(normalizeRepositoryName));
+      state.starredPromoted = new Set(locallyRecorded);
+
+      if (!username) {
+        updateStarSyncStatus();
+        return;
+      }
+
+      const cache = readObject('tikdev-star-cache', {});
+      if (!force && cache.username === username.toLowerCase() && Date.now() - Number(cache.checkedAt || 0) < STAR_CACHE_TTL_MS) {
+        for (const repo of Array.isArray(cache.repositories) ? cache.repositories : []) state.starredPromoted.add(normalizeRepositoryName(repo));
+        updateStarSyncStatus();
+        removeStarredPromotionCards();
+        return;
+      }
+
+      updateStarSyncStatus(`Checking @${username}'s public stars…`);
+      refreshStarStatusButton.disabled = true;
+      try {
+        const matches = await fetchStarredPromotionMatches(username);
+        for (const repo of matches) state.starredPromoted.add(repo);
+        try {
+          localStorage.setItem('tikdev-star-cache', JSON.stringify({
+            username: username.toLowerCase(),
+            checkedAt: Date.now(),
+            repositories: [...matches]
+          }));
+        } catch { /* private mode */ }
+        updateStarSyncStatus();
+        removeStarredPromotionCards();
+      } catch (error) {
+        updateStarSyncStatus(error.message || 'Could not check public starred repositories.');
+      } finally {
+        refreshStarStatusButton.disabled = false;
+      }
+    }
+
+    function markPromotedRepositoryStarred(fullName) {
+      const normalized = normalizeRepositoryName(fullName);
+      if (!PROMOTED_REPOSITORIES.some(repo => normalizeRepositoryName(repo) === normalized)) return;
+      state.starredPromoted.add(normalized);
+      const local = new Set(readJson('tikdev-promoted-starred', []).map(normalizeRepositoryName));
+      local.add(normalized);
+      writeJson('tikdev-promoted-starred', [...local]);
+      updateStarSyncStatus();
+      document.querySelectorAll(`[data-action="promo-star"][data-repo="${CSS.escape(fullName)}"]`).forEach(button => {
+        button.setAttribute('aria-pressed', 'true');
+        const label = button.querySelector('.button-label');
+        if (label) label.textContent = 'Star recorded';
+      });
+      setTimeout(removeStarredPromotionCards, 700);
+    }
+
+    function eligiblePromotedRepositories() {
+      return PROMOTED_REPOSITORIES.filter(repo => !state.starredPromoted.has(normalizeRepositoryName(repo)));
+    }
+
+    async function fetchPromotedRepository(fullName) {
+      if (state.promotedRepositories.has(fullName)) return state.promotedRepositories.get(fullName);
+      const response = await fetch(`${API}/repos/${fullName.split('/').map(encodeURIComponent).join('/')}`, {
+        headers: { Accept: 'application/vnd.github+json' }
+      });
+      if (!response.ok) throw new Error(`GitHub returned error ${response.status}.`);
+      const repo = await response.json();
+      repo.__tikdevPromoted = true;
+      state.promotedRepositories.set(fullName, repo);
+      return repo;
+    }
+
+    async function injectPromotedRepository() {
+      if (state.promotionBusy || state.mode === 'saved' || document.hidden) return false;
+      const eligible = eligiblePromotedRepositories();
+      if (!eligible.length) {
+        removeStarredPromotionCards();
+        return false;
+      }
+
+      const existingPromotion = feed.querySelector('[data-promoted="true"]');
+      if (existingPromotion) {
+        const cards = [...feed.querySelectorAll('.feed-card')];
+        if (cards.indexOf(existingPromotion) === state.activeIndex) return false;
+        state.promotedRepositories.delete(existingPromotion.dataset.repo);
+        existingPromotion.remove();
+      }
+
+      const displayed = new Set([...feed.querySelectorAll('[data-repo]')].map(card => normalizeRepositoryName(card.dataset.repo)));
+      let candidates = eligible.filter(repo => !displayed.has(normalizeRepositoryName(repo)));
+      if (!candidates.length) candidates = eligible;
+
+      const selected = candidates[state.promotionCursor % candidates.length];
+      state.promotionCursor = (state.promotionCursor + 1) % 100000;
+      try { localStorage.setItem('tikdev-promotion-cursor', String(state.promotionCursor)); } catch { /* private mode */ }
+
+      state.promotionBusy = true;
+      try {
+        const repo = await fetchPromotedRepository(selected);
+        if (state.starredPromoted.has(normalizeRepositoryName(selected)) || state.mode === 'saved') return false;
+
+        const template = document.createElement('template');
+        template.innerHTML = repoCard(repo).trim();
+        const card = template.content.firstElementChild;
+        const cards = [...feed.querySelectorAll('.feed-card')];
+        const activeCard = cards[Math.max(0, Math.min(state.activeIndex, cards.length - 1))];
+        const nextCard = activeCard && activeCard.nextElementSibling;
+        if (nextCard && nextCard.dataset.kind === 'loading') nextCard.before(card);
+        else if (activeCard) activeCard.after(card);
+        else feed.appendChild(card);
+        observeCards();
+        updatePosition();
+        return true;
+      } catch {
+        return false;
+      } finally {
+        state.promotionBusy = false;
+      }
+    }
+
+    function scheduleNextPromotion(delay = PROMOTION_INTERVAL_MS) {
+      clearTimeout(state.promotionTimer);
+      const safeDelay = Math.max(15000, Number(delay) || PROMOTION_INTERVAL_MS);
+      try { localStorage.setItem('tikdev-next-promotion-at', String(Date.now() + safeDelay)); } catch { /* private mode */ }
+      state.promotionTimer = window.setTimeout(async () => {
+        await injectPromotedRepository();
+        scheduleNextPromotion(PROMOTION_INTERVAL_MS);
+      }, safeDelay);
+    }
+
+    function startPromotionSchedule() {
+      const stored = Number(readText('tikdev-next-promotion-at'));
+      const delay = Number.isFinite(stored) && stored > Date.now()
+        ? Math.min(PROMOTION_INTERVAL_MS, stored - Date.now())
+        : FIRST_PROMOTION_DELAY_MS;
+      scheduleNextPromotion(delay);
+    }
+
+    window.__TIKDEV_PROMOTION__ = Object.freeze({
+      injectNow: injectPromotedRepository,
+      refreshStars: () => refreshPromotedStarStatus(true),
+      repositories: PROMOTED_REPOSITORIES
+    });
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('visible');
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => toast.classList.remove('visible'), 2200);
+    }
+
+    function updateSearchClear() {
+      searchClear.classList.toggle('visible', Boolean(searchInput.value));
+    }
+
+    searchInput.addEventListener('input', updateSearchClear);
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      state.query = '';
+      updateSearchClear();
+      searchInput.focus();
+      if (state.mode !== 'saved') resetAndLoad();
+    });
+
+    searchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      state.query = searchInput.value.trim();
+      updateSearchClear();
+      if (state.mode === 'saved') setMode('discover');
+      else resetAndLoad();
+    });
+
+    document.querySelectorAll('.mode-button').forEach(button => {
+      button.addEventListener('click', () => setMode(button.dataset.mode));
+    });
+
+    document.getElementById('topicsButton').addEventListener('click', openTopics);
+    topicFilter.addEventListener('input', () => renderTopicChoices());
+    document.getElementById('clearTopics').addEventListener('click', () => {
+      state.draftTopics.clear();
+      renderTopicChoices();
+    });
+    document.getElementById('saveTopics').addEventListener('click', () => {
+      state.selectedTopics = new Set(state.draftTopics);
+      writeJson('tikdev-topics', [...state.selectedTopics]);
+      const username = sanitizeGithubUsername(githubUsernameInput.value);
+      state.githubUsername = username;
+      try {
+        if (username) localStorage.setItem('tikdev-github-username', username);
+        else localStorage.removeItem('tikdev-github-username');
+      } catch { /* private mode */ }
+      updateTopicStatus();
+      topicsDialog.close();
+      refreshPromotedStarStatus(true);
+      if (state.mode === 'saved') setMode('discover');
+      else resetAndLoad();
+    });
+
+    refreshStarStatusButton.addEventListener('click', async () => {
+      const username = sanitizeGithubUsername(githubUsernameInput.value);
+      if (!username && githubUsernameInput.value.trim()) {
+        updateStarSyncStatus('Enter a valid GitHub username.');
+        githubUsernameInput.focus();
+        return;
+      }
+      state.githubUsername = username;
+      try {
+        if (username) localStorage.setItem('tikdev-github-username', username);
+        else localStorage.removeItem('tikdev-github-username');
+      } catch { /* private mode */ }
+      await refreshPromotedStarStatus(true);
+    });
+
+    topicGrid.addEventListener('click', event => {
+      const button = event.target.closest('[data-topic-choice]');
+      if (!button) return;
+      const topic = button.dataset.topicChoice;
+      state.draftTopics.has(topic) ? state.draftTopics.delete(topic) : state.draftTopics.add(topic);
+      button.classList.toggle('selected', state.draftTopics.has(topic));
+      button.setAttribute('aria-pressed', String(state.draftTopics.has(topic)));
+      selectionSummary.textContent = `${state.draftTopics.size} selected`;
+    });
+
+    document.querySelectorAll('[data-close]').forEach(button => {
+      button.addEventListener('click', () => document.getElementById(button.dataset.close).close());
+    });
+
+    [topicsDialog, readmeDialog].forEach(dialog => {
+      dialog.addEventListener('click', event => {
+        const bounds = dialog.getBoundingClientRect();
+        const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+        if (outside) dialog.close();
+      });
+    });
+
+    feed.addEventListener('click', event => {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+      const action = target.dataset.action;
+      if (action === 'next') scrollToCard(1);
+      else if (action === 'open-topics') openTopics();
+      else if (action === 'retry') {
+        if (state.query) { state.query = ''; searchInput.value = ''; }
+        resetAndLoad();
+      }
+      else if (action === 'readme') openReadme(target.dataset.repo);
+      else if (action === 'promo-star') {
+        const repo = findRepo(target.dataset.repo);
+        if (repo) window.open(repo.html_url, '_blank', 'noopener,noreferrer');
+        markPromotedRepositoryStarred(target.dataset.repo);
+      }
+      else if (action === 'save') saveRepo(target.dataset.repo);
+      else if (action === 'share') shareRepo(target.dataset.repo);
+      else if (action === 'topic') {
+        const topic = target.dataset.topic;
+        state.selectedTopics = new Set([topic]);
+        writeJson('tikdev-topics', [topic]);
+        updateTopicStatus();
+        state.query = '';
+        searchInput.value = '';
+        if (state.mode === 'saved') setMode('discover');
+        else resetAndLoad();
+      }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.target.matches('input, textarea') || topicsDialog.open || readmeDialog.open) return;
+      if (['ArrowDown', 'PageDown', 'j', 'J'].includes(event.key)) { event.preventDefault(); scrollToCard(1); }
+      if (['ArrowUp', 'PageUp', 'k', 'K'].includes(event.key)) { event.preventDefault(); scrollToCard(-1); }
+      if (event.key === '/') { event.preventDefault(); searchInput.focus(); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchInput.focus(); }
+    });
+
+    function syncNavigationHeight() {
+      const height = Math.ceil(appHeader.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--nav-h', `${height}px`);
+    }
+
+    const navResizeObserver = new ResizeObserver(syncNavigationHeight);
+    navResizeObserver.observe(appHeader);
+    addEventListener('resize', syncNavigationHeight, { passive: true });
+    syncNavigationHeight();
+
+    function updateFullscreenButton() {
+      const active = Boolean(document.fullscreenElement);
+      fullscreenButton.setAttribute('aria-label', active ? 'Exit full screen' : 'Enter full screen');
+      fullscreenButton.setAttribute('title', active ? 'Exit full screen' : 'Enter full screen');
+      fullscreenButton.setAttribute('aria-pressed', String(active));
+      fullscreenIcon.innerHTML = active
+        ? '<path d="M9 9H4V4M15 9h5V4M9 15H4v5M15 15h5v5"></path>'
+        : '<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path>';
+    }
+
+    if (!document.documentElement.requestFullscreen) fullscreenButton.hidden = true;
+    fullscreenButton.addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      } catch {
+        showToast('Full screen is not available in this browser');
+      }
+    });
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    updateFullscreenButton();
+
+    const LOFI_GIRL_STREAM_ID = 'X4VbdwhkE10';
+    const LOFI_GIRL_STREAM_URL = `https://www.youtube-nocookie.com/embed/${LOFI_GIRL_STREAM_ID}`;
+    let musicStarted = false;
+    function showMusicPanel(show) {
+      musicPanel.classList.toggle('visible', show);
+      musicPanel.setAttribute('aria-hidden', String(!show));
+    }
+
+    function startMusic() {
+      if (!musicStarted) {
+        const iframe = document.createElement('iframe');
+        iframe.title = 'Lofi Girl live lofi hip hop radio';
+        iframe.src = `${LOFI_GIRL_STREAM_URL}?autoplay=1&controls=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
+        iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.allowFullscreen = true;
+        musicFrame.replaceChildren(iframe);
+        musicStarted = true;
+        musicButton.setAttribute('aria-pressed', 'true');
+        musicButton.setAttribute('aria-label', 'Show background music player');
+        musicIcon.innerHTML = '<path d="M4 15v-6M8 18V6M12 16V8M16 19V5M20 15V9"></path>';
+      }
+      showMusicPanel(true);
+    }
+
+    function stopMusic() {
+      musicFrame.innerHTML = '<p>Press the music button to start the stream.</p>';
+      musicStarted = false;
+      musicButton.setAttribute('aria-pressed', 'false');
+      musicButton.setAttribute('aria-label', 'Play background lofi music');
+      musicIcon.innerHTML = '<path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle>';
+      showMusicPanel(false);
+      showToast('Lofi Girl stream stopped');
+    }
+
+    musicButton.addEventListener('click', () => {
+      if (!musicStarted) startMusic();
+      else showMusicPanel(!musicPanel.classList.contains('visible'));
+    });
+    document.getElementById('hideMusic').addEventListener('click', () => showMusicPanel(false));
+    document.getElementById('stopMusic').addEventListener('click', stopMusic);
+
+    const themeButton = document.getElementById('themeButton');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    const storedTheme = localStorage.getItem('tikdev-theme');
+    const initialTheme = storedTheme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      themeMeta.setAttribute('content', theme === 'dark' ? '#050207' : '#f7f4fb');
+      themeButton.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+      themeButton.setAttribute('title', theme === 'dark' ? 'Use light theme' : 'Use dark theme');
+      themeIcon.innerHTML = theme === 'dark'
+        ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>'
+        : '<path d="M12 3a9 9 0 1 0 9 9c0-.5-.04-1-.12-1.47A7 7 0 0 1 12 3Z"></path>';
+    }
+
+    applyTheme(initialTheme);
+    themeButton.addEventListener('click', () => {
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(theme);
+      localStorage.setItem('tikdev-theme', theme);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      const nextAt = Number(readText('tikdev-next-promotion-at'));
+      if (Number.isFinite(nextAt) && nextAt <= Date.now()) {
+        injectPromotedRepository().finally(() => scheduleNextPromotion(PROMOTION_INTERVAL_MS));
+      }
+    });
+
+    githubUsernameInput.value = state.githubUsername;
+    updateSearchClear();
+    updateTopicStatus();
+    updateStarSyncStatus();
+    renderInitial();
+    loadMore(true, state.requestId);
+    refreshPromotedStarStatus(false).finally(startPromotionSchedule);
+  </script>
+</body>
+</html>

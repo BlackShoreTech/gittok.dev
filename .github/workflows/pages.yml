@@ -1,0 +1,104 @@
+name: Deploy TikDev to GitHub Pages
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Prepare portable site
+        id: prepare
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+
+          rm -rf _site
+          mkdir _site
+          cp index.html _site/index.html
+          cp dedsec-butterfly.png _site/dedsec-butterfly.png
+
+          cname=""
+          if [[ -f CNAME ]]; then
+            cname="$(head -n 1 CNAME | tr -d '\r' | xargs)"
+            if [[ "$cname" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; then
+              printf '%s\n' "$cname" > _site/CNAME
+            else
+              echo "Ignoring invalid CNAME value: $cname"
+              cname=""
+            fi
+          fi
+
+          site_url="${PAGES_BASE_URL%/}/"
+          if [[ -n "$cname" ]]; then
+            site_url="https://${cname}/"
+          fi
+
+          preview_image="${site_url}dedsec-butterfly.png"
+
+          python3 - "$REPOSITORY" "$site_url" "$cname" "$preview_image" <<'PY'
+          from pathlib import Path
+          import sys
+
+          repository, site_url, cname, preview_image = sys.argv[1:]
+          path = Path('_site/index.html')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('__TIKDEV_REPOSITORY__', repository)
+          text = text.replace('__TIKDEV_SITE_URL__', site_url)
+          text = text.replace('__TIKDEV_CNAME__', cname)
+          text = text.replace('__TIKDEV_OG_IMAGE__', preview_image)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          {
+            echo "### TikDev Pages deployment"
+            echo ""
+            echo "- Repository: \`$REPOSITORY\`"
+            echo "- Detected site URL: $site_url"
+            echo "- Embed preview image: $preview_image"
+            if [[ -n "$cname" ]]; then
+              echo "- CNAME: \`$cname\`"
+            else
+              echo "- CNAME: not present"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
