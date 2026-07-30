@@ -1,0 +1,126 @@
+name: Deploy TikDev to GitHub Pages
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    outputs:
+      site_url: ${{ steps.site.outputs.site_url }}
+      repository: ${{ steps.site.outputs.repository }}
+      custom_domain: ${{ steps.site.outputs.custom_domain }}
+    steps:
+      - name: Checkout current fork
+        uses: actions/checkout@v6
+
+      - name: Read GitHub Pages configuration
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Prepare portable site
+        id: site
+        shell: bash
+        env:
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+
+          rm -rf _site
+          mkdir -p _site
+          cp index.html README.md LICENSE _site/
+
+          CNAME_VALUE=""
+          if [[ -f CNAME ]]; then
+            CNAME_VALUE="$(tr -d '\r\n[:space:]' < CNAME | tr '[:upper:]' '[:lower:]')"
+            if [[ -n "$CNAME_VALUE" ]]; then
+              if [[ ! "$CNAME_VALUE" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])$ ]]; then
+                echo "Invalid CNAME value: $CNAME_VALUE" >&2
+                exit 1
+              fi
+              printf '%s\n' "$CNAME_VALUE" > _site/CNAME
+            fi
+          fi
+
+          if [[ -n "$CNAME_VALUE" ]]; then
+            SITE_URL="https://${CNAME_VALUE}/"
+          elif [[ -n "${PAGES_BASE_URL:-}" ]]; then
+            SITE_URL="${PAGES_BASE_URL%/}/"
+          else
+            OWNER="${GITHUB_REPOSITORY_OWNER}"
+            REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
+            if [[ "${REPOSITORY_NAME,,}" == "${OWNER,,}.github.io" ]]; then
+              SITE_URL="https://${OWNER}.github.io/"
+            else
+              SITE_URL="https://${OWNER}.github.io/${REPOSITORY_NAME}/"
+            fi
+          fi
+
+          export SITE_URL CNAME_VALUE
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('_site/index.html')
+          html = path.read_text(encoding='utf-8')
+          values = {
+              '__TIKDEV_REPOSITORY__': os.environ['GITHUB_REPOSITORY'],
+              '__TIKDEV_SITE_URL__': os.environ['SITE_URL'],
+              '__TIKDEV_CNAME__': os.environ.get('CNAME_VALUE', ''),
+          }
+          for marker, value in values.items():
+              escaped = json.dumps(value, ensure_ascii=False)[1:-1]
+              html = html.replace(marker, escaped)
+          path.write_text(html, encoding='utf-8')
+          PY
+
+          {
+            echo "site_url=$SITE_URL"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "custom_domain=${CNAME_VALUE:-none}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### TikDev Pages configuration"
+            echo "- Repository: \`$GITHUB_REPOSITORY\`"
+            echo "- Detected site URL: $SITE_URL"
+            echo "- CNAME: \`${CNAME_VALUE:-not present}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Add final deployment link
+        shell: bash
+        run: |
+          {
+            echo "### Deployment complete"
+            echo "- Published URL: ${{ steps.deployment.outputs.page_url }}"
+            echo "- Build-detected URL: ${{ needs.build.outputs.site_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

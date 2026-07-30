@@ -1,6 +1,0 @@
-@import 'tailwindcss';
-
-/* Global dark theme styles */
-body {
-    @apply bg-gradient-to-b from-gray-900 to-black min-h-screen text-gray-200;
-}
