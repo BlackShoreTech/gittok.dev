@@ -38,4 +38,4 @@ The workflow detects the current fork, default branch, GitHub Pages base URL, an
 
 ## Privacy
 
-TikDev has no analytics, account system, advertising tracker, or database. Interests, saved repositories, optional GitHub username, promotion timing, and locally recorded stars stay in browser storage. Repository content and public star lists are requested directly from GitHub's public API. The optional focus-radio player contacts YouTube only after the visitor starts it.
+TikDev has no analytics, account system, advertising tracker, or database. Interests, saved repositories, optional GitHub username, promotion timing, and locally recorded stars stay in browser storage. Repository content and public star lists are requested directly from GitHub's public API. The optional focus-radio player uses the official Lofi Girl live stream and contacts YouTube only after the visitor starts it. Feed scrolling uses natural touch movement and a guarded one-card wheel step on desktop to prevent accidental multi-card jumps.

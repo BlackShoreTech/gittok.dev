@@ -261,8 +261,8 @@
       inset: calc(var(--header-h) + 50px) 0 0;
       overflow-y: auto;
       overflow-x: hidden;
-      scroll-snap-type: y mandatory;
-      overscroll-behavior-y: contain;
+      scroll-snap-type: y proximity;
+      overscroll-behavior-y: auto;
       scrollbar-width: thin;
       scrollbar-color: rgba(124, 92, 255, .55) transparent;
     }
@@ -270,7 +270,7 @@
     .feed-card {
       min-height: calc(100dvh - var(--header-h) - 50px);
       scroll-snap-align: start;
-      scroll-snap-stop: always;
+      scroll-snap-stop: normal;
       display: grid;
       place-items: center;
       padding: clamp(14px, 3vw, 32px);
@@ -890,7 +890,7 @@
       padding: clamp(24px, 4.2vw, 58px);
       gap: clamp(16px, 2.1vh, 26px);
       overflow: auto;
-      overscroll-behavior: contain;
+      overscroll-behavior-y: auto;
     }
     .repo-topline { gap: 13px; }
     .avatar { width: 46px; height: 46px; border-radius: 14px 6px 14px 6px; }
@@ -1501,6 +1501,30 @@
       }
     }
 
+
+    /* Stable scrolling: natural touch movement plus one-card desktop wheel steps. */
+    html { scroll-behavior: auto; }
+    .feed {
+      scroll-snap-type: y proximity;
+      scroll-behavior: smooth;
+      overscroll-behavior-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      scroll-padding-block: 2px;
+    }
+    .feed-card {
+      scroll-snap-stop: normal;
+      touch-action: pan-y;
+    }
+    .repo-main { overscroll-behavior-y: auto; }
+
+    @media (pointer: coarse) {
+      .feed { scroll-behavior: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .feed { scroll-behavior: auto; }
+    }
   </style>
 </head>
 <body>
@@ -1572,7 +1596,7 @@
     </div>
     <div class="music-panel-actions">
       <button class="text-button" id="stopMusic" type="button">Stop music</button>
-      <a class="text-button" href="https://www.youtube.com/watch?v=5qap5aO4i9A" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a>
+      <a class="text-button" href="https://www.youtube.com/@LofiGirl/streams" target="_blank" rel="noopener noreferrer">Open Lofi Girl live streams ↗</a>
     </div>
   </aside>
 
@@ -2238,12 +2262,75 @@
       positionIndicator.textContent = `${visibleIndex} / ${Math.max(1, cards.length)}`;
     }
 
+    function nearestCardIndex(cards = [...feed.querySelectorAll('.feed-card')]) {
+      if (!cards.length) return 0;
+      const feedTop = feed.getBoundingClientRect().top;
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+      cards.forEach((card, index) => {
+        const distance = Math.abs(card.getBoundingClientRect().top - feedTop);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+      return closestIndex;
+    }
+
     function scrollToCard(offset) {
       const cards = [...feed.querySelectorAll('.feed-card')];
       if (!cards.length) return;
-      const target = Math.max(0, Math.min(cards.length - 1, state.activeIndex + offset));
-      cards[target].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const current = nearestCardIndex(cards);
+      const target = Math.max(0, Math.min(cards.length - 1, current + offset));
+      state.activeIndex = target;
+      cards[target].scrollIntoView({
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      });
     }
+
+    function scrollableAncestorCanMove(start, deltaY) {
+      let node = start instanceof Element ? start : null;
+      while (node && node !== feed) {
+        const style = getComputedStyle(node);
+        const canScroll = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2;
+        if (canScroll) {
+          const hasRoomDown = node.scrollTop + node.clientHeight < node.scrollHeight - 2;
+          const hasRoomUp = node.scrollTop > 2;
+          if ((deltaY > 0 && hasRoomDown) || (deltaY < 0 && hasRoomUp)) return true;
+        }
+        node = node.parentElement;
+      }
+      return false;
+    }
+
+    let wheelDistance = 0;
+    let wheelResetTimer = 0;
+    let wheelLocked = false;
+    const finePointer = matchMedia('(pointer: fine)');
+
+    feed.addEventListener('wheel', event => {
+      if (!finePointer.matches || event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      if (scrollableAncestorCanMove(event.target, event.deltaY)) return;
+
+      event.preventDefault();
+      if (wheelLocked) return;
+
+      const multiplier = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? feed.clientHeight
+        : 1;
+      wheelDistance += event.deltaY * multiplier;
+
+      clearTimeout(wheelResetTimer);
+      wheelResetTimer = window.setTimeout(() => { wheelDistance = 0; }, 180);
+
+      if (Math.abs(wheelDistance) < 90) return;
+      const direction = wheelDistance > 0 ? 1 : -1;
+      wheelDistance = 0;
+      wheelLocked = true;
+      scrollToCard(direction);
+      window.setTimeout(() => { wheelLocked = false; }, 520);
+    }, { passive: false });
 
     function findRepo(fullName) {
       return state.repositories.find(repo => repo.full_name === fullName)
@@ -2725,6 +2812,8 @@
     document.addEventListener('fullscreenchange', updateFullscreenButton);
     updateFullscreenButton();
 
+    const LOFI_GIRL_STREAM_ID = 'X4VbdwhkE10';
+    const LOFI_GIRL_STREAM_URL = `https://www.youtube-nocookie.com/embed/${LOFI_GIRL_STREAM_ID}`;
     let musicStarted = false;
     function showMusicPanel(show) {
       musicPanel.classList.toggle('visible', show);
@@ -2734,8 +2823,8 @@
     function startMusic() {
       if (!musicStarted) {
         const iframe = document.createElement('iframe');
-        iframe.title = 'Lofi Girl background music';
-        iframe.src = 'https://www.youtube-nocookie.com/embed/5qap5aO4i9A?autoplay=1&controls=1&playsinline=1&rel=0';
+        iframe.title = 'Lofi Girl live lofi hip hop radio';
+        iframe.src = `${LOFI_GIRL_STREAM_URL}?autoplay=1&controls=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
         iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
         iframe.referrerPolicy = 'strict-origin-when-cross-origin';
         iframe.allowFullscreen = true;
@@ -2755,7 +2844,7 @@
       musicButton.setAttribute('aria-label', 'Play background lofi music');
       musicIcon.innerHTML = '<path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle>';
       showMusicPanel(false);
-      showToast('Background music stopped');
+      showToast('Lofi Girl stream stopped');
     }
 
     musicButton.addEventListener('click', () => {
