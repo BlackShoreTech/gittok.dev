@@ -12,9 +12,15 @@
   <meta property="og:title" content="TikDev — Swipe Through Open Source">
   <meta property="og:description" content="Discover useful GitHub repositories in a fast, mobile-first feed.">
   <meta id="openGraphUrl" property="og:url" content="">
+  <meta id="openGraphImage" property="og:image" content="__TIKDEV_OG_IMAGE__">
+  <meta property="og:image:alt" content="Purple DedSec Project butterfly emblem on a black background">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="TikDev — Swipe Through Open Source">
   <meta name="twitter:description" content="Discover useful GitHub repositories in a fast, mobile-first feed.">
+  <meta id="twitterImage" name="twitter:image" content="__TIKDEV_OG_IMAGE__">
+  <meta name="twitter:image:alt" content="Purple DedSec Project butterfly emblem on a black background">
+  <link rel="icon" type="image/png" sizes="512x512" href="dedsec-butterfly.png">
+  <link rel="apple-touch-icon" href="dedsec-butterfly.png">
   <title>TikDev — Swipe Through Open Source</title>
   <style>
     :root {
@@ -1130,48 +1136,445 @@
       .app-header, .mode-bar, .side-actions, .position-indicator { background: var(--bg); }
     }
 
+
+    /* Unified TikDev navigation, expanded discovery, fullscreen and music */
+    :root {
+      --nav-h: 76px;
+      --header-h: 0px;
+      --mode-h: 0px;
+    }
+
+    .app-header {
+      height: auto;
+      min-height: 68px;
+      grid-template-columns: auto minmax(290px, auto) minmax(260px, 1fr) auto;
+      grid-template-areas: "brand modes search actions";
+      align-items: center;
+      gap: 10px clamp(10px, 1.5vw, 22px);
+      padding: max(10px, env(safe-area-inset-top)) clamp(10px, 2vw, 28px) 10px;
+    }
+
+    .brand { grid-area: brand; }
+    .brand-mark { display: none !important; }
+    .brand-text {
+      display: inline !important;
+      font-size: clamp(1.15rem, 2vw, 1.55rem);
+      letter-spacing: -.055em;
+    }
+
+    .mode-bar {
+      grid-area: modes;
+      position: static;
+      inset: auto;
+      width: 100%;
+      height: auto;
+      min-width: 0;
+      justify-content: stretch;
+      gap: 4px;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+      border: 0;
+      backdrop-filter: none;
+    }
+    .mode-button {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 38px;
+      min-height: 38px;
+      padding-inline: clamp(8px, 1vw, 14px);
+      font-size: clamp(.72rem, .9vw, .86rem);
+      white-space: nowrap;
+    }
+    .topic-status { display: none !important; }
+
+    .search-form { grid-area: search; max-width: none; }
+    .search-input { height: 44px; padding-right: 96px; }
+    .search-submit { top: 4px; right: 4px; height: 36px; }
+    .search-clear {
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: 76px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(.9);
+      transition: opacity .18s, transform .18s, background .18s, color .18s;
+    }
+    .search-clear.visible { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
+    .search-clear:hover { color: var(--text); background: var(--surface-2); }
+    .search-clear svg { position: static; width: 17px; height: 17px; transform: none; }
+
+    .header-actions {
+      grid-area: actions;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 40px;
+      gap: 6px;
+    }
+    .header-actions .icon-button {
+      display: inline-grid !important;
+      width: 40px;
+      height: 40px;
+    }
+    .icon-button[aria-pressed="true"] {
+      color: white;
+      border-color: color-mix(in srgb, var(--primary-2) 45%, var(--primary));
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+    }
+
+    .feed { inset: var(--nav-h) 0 0; }
+    .feed-card { min-height: calc(100dvh - var(--nav-h)); }
+    .repo-shell {
+      min-height: min(720px, calc(100dvh - var(--nav-h) - 28px));
+      max-height: calc(100dvh - var(--nav-h) - 20px);
+    }
+
+    .topic-filter {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      width: 100%;
+      min-height: 46px;
+      margin: 2px 0 8px;
+      padding: 0 14px;
+      color: var(--text);
+      background: var(--surface-solid);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      outline: none;
+    }
+    .topic-filter:focus { border-color: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 15%, transparent); }
+    .selection-summary { margin-bottom: 14px; color: var(--muted); font-size: .82rem; font-weight: 750; }
+    .topic-grid { display: grid; gap: 18px; }
+    .topic-section { display: grid; gap: 9px; }
+    .topic-section h3 { margin: 0; color: var(--text); font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; }
+    .topic-section-options { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .music-panel {
+      position: fixed;
+      z-index: 80;
+      top: calc(var(--nav-h) + 10px);
+      right: max(10px, env(safe-area-inset-right));
+      width: min(370px, calc(100vw - 20px));
+      padding: 12px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--surface-solid) 94%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 18px 7px 18px 7px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-10px) scale(.98);
+      transition: opacity .2s, transform .2s, visibility .2s;
+    }
+    .music-panel.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    .music-panel-header, .music-panel-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .music-panel-header { margin-bottom: 10px; }
+    .music-panel-header div { display: grid; gap: 2px; }
+    .music-panel-header span { color: var(--muted); font-size: .75rem; }
+    .mini-button {
+      min-height: 34px;
+      padding: 0 11px;
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .music-frame {
+      aspect-ratio: 16 / 9;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--muted);
+      background: #050207;
+      border: 1px solid var(--line);
+      border-radius: 13px 5px 13px 5px;
+    }
+    .music-frame iframe { width: 100%; height: 100%; border: 0; }
+    .music-frame p { padding: 16px; text-align: center; font-size: .84rem; }
+    .music-panel-actions { margin-top: 10px; }
+    .music-panel-actions .text-button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+    @media (max-width: 1180px) {
+      .app-header {
+        grid-template-columns: auto minmax(250px, 1fr) auto;
+        grid-template-areas:
+          "brand modes actions"
+          "search search search";
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app-header {
+        grid-template-columns: auto 1fr;
+        grid-template-areas:
+          "brand actions"
+          "search search"
+          "modes modes";
+        gap: 7px 8px;
+        padding: max(7px, env(safe-area-inset-top)) 8px 7px;
+      }
+      .brand-text { font-size: 1.12rem; }
+      .header-actions {
+        justify-self: end;
+        grid-auto-columns: 36px;
+        gap: 4px;
+      }
+      .header-actions .icon-button { width: 36px; height: 36px; border-radius: 11px; }
+      .header-actions .icon-button svg { width: 18px; height: 18px; }
+      .search-input { height: 42px; padding-right: 48px; border-radius: 12px; }
+      .search-submit { display: none; }
+      .search-clear { right: 7px; }
+      .mode-bar { width: 100%; gap: 3px; }
+      .mode-button { height: 34px; min-height: 34px; padding-inline: 5px; font-size: clamp(.68rem, 3vw, .78rem); }
+      .feed-card { padding: 8px; min-height: calc(100dvh - var(--nav-h)); }
+      .repo-shell {
+        min-height: calc(100dvh - var(--nav-h) - 16px);
+        max-height: calc(100dvh - var(--nav-h) - 16px);
+      }
+      .music-panel { top: calc(var(--nav-h) + 6px); right: 6px; width: calc(100vw - 12px); }
+    }
+
+    @media (max-width: 330px) {
+      .header-actions { grid-auto-columns: 33px; gap: 2px; }
+      .header-actions .icon-button { width: 33px; height: 33px; }
+      .brand-text { font-size: 1rem; }
+      .mode-button { font-size: .65rem; }
+    }
+
+    @media (orientation: landscape) and (max-height: 540px) {
+      .app-header {
+        grid-template-columns: auto minmax(245px, .8fr) minmax(220px, 1fr) auto;
+        grid-template-areas: "brand modes search actions";
+        padding-block: 5px;
+      }
+      .search-input { height: 38px; }
+      .mode-button { height: 32px; min-height: 32px; }
+      .header-actions { grid-auto-columns: 34px; }
+      .header-actions .icon-button { width: 34px; height: 34px; }
+    }
+
+
+
+    /* DedSec Project rotation and public GitHub star filtering */
+    .featured-card .repo-shell {
+      border-color: color-mix(in srgb, var(--primary) 58%, var(--primary-2) 18%);
+      box-shadow: 0 24px 90px color-mix(in srgb, var(--primary) 16%, transparent), var(--shadow);
+    }
+    .featured-card .repo-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, transparent), transparent 42%, color-mix(in srgb, var(--primary-2) 8%, transparent));
+    }
+    .featured-card .repo-main { position: relative; z-index: 1; min-height: 0; }
+    .featured-card .side-actions { z-index: 6; }
+    .featured-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      width: fit-content;
+      max-width: 100%;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--line));
+      border-radius: 999px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--primary) 11%, var(--surface-2));
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .featured-label img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+    .featured-note { max-width: 64ch; color: var(--muted); font-size: clamp(.78rem, 1vw, .9rem); line-height: 1.55; }
+    .github-star-settings {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+      margin: 14px 0 4px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px 7px 16px 7px;
+      background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+    }
+    .github-star-field { display: grid; gap: 6px; min-width: 0; }
+    .github-star-field label { font-size: .78rem; font-weight: 800; color: var(--text); }
+    .github-star-field input {
+      width: 100%;
+      min-width: 0;
+      min-height: 43px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px 5px 12px 5px;
+      color: var(--text);
+      background: var(--surface-solid);
+      outline: none;
+    }
+    .github-star-field input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
+    .github-star-help, .star-sync-status { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+    .star-sync-status { min-height: 1.1em; color: var(--primary-2); }
+    .promo-star-button[aria-pressed="true"] { opacity: .72; }
+
+    @media (max-width: 560px) {
+      .github-star-settings { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+      .github-star-settings .text-button { width: 100%; }
+      .featured-label { font-size: .66rem; }
+      .featured-note { font-size: .76rem; }
+      .featured-card .repo-main { height: 100%; min-height: 0; }
+    }
+
+    @media (max-width: 340px) {
+      body { min-width: 280px; }
+      .featured-label { max-width: calc(100vw - 44px); }
+      .featured-note { display: none; }
+      .github-star-settings { margin-inline: -2px; padding: 10px; }
+    }
+
+    @media (max-height: 590px) and (orientation: landscape) {
+      .featured-note { display: none; }
+      .featured-label { min-height: 26px; padding-block: 3px; }
+    }
+
+
+
+    /* Keep complete repository controls reachable on very small screens. */
+    @media (max-width: 760px) {
+      .feed-card:not(.intro-card) .repo-main {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .intro-card .repo-main {
+        position: relative;
+        inset: auto;
+        width: auto;
+        height: 100%;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .feed-card:not(.intro-card) .repo-actions {
+        flex-wrap: nowrap;
+      }
+      .feed-card:not(.intro-card) .repo-actions .primary-link {
+        min-width: 0;
+        flex: 1 1 0;
+        padding-inline: 10px;
+        font-size: .82rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .feed-card:not(.intro-card) .repo-actions .secondary-button {
+        width: 44px;
+        flex: 0 0 44px;
+      }
+    }
+
   </style>
 </head>
 <body>
   <a class="skip-link" href="#feed">Skip to project feed</a>
 
-  <header class="app-header">
+  <header class="app-header" id="appHeader">
     <a class="brand" href="./" aria-label="TikDev home">
-      <span class="brand-mark" aria-hidden="true"></span>
       <span class="brand-text">TikDev</span>
     </a>
+
+    <nav class="mode-bar" aria-label="Feed type">
+      <button class="mode-button active" type="button" data-mode="discover">Discover</button>
+      <button class="mode-button" type="button" data-mode="popular">Popular</button>
+      <button class="mode-button" type="button" data-mode="fresh">Fresh</button>
+      <button class="mode-button" type="button" data-mode="saved">Saved</button>
+      <span class="topic-status" id="topicStatus">All development topics</span>
+    </nav>
 
     <form class="search-form" id="searchForm" role="search">
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
       <label class="sr-only" for="searchInput">Search GitHub repositories</label>
-      <input class="search-input" id="searchInput" type="search" maxlength="100" autocomplete="off" placeholder="Search projects, tools or languages…">
+      <input class="search-input" id="searchInput" type="search" maxlength="160" autocomplete="off" spellcheck="false" list="searchSuggestions" placeholder="Search projects, topics, owners, languages…">
+      <datalist id="searchSuggestions">
+        <option value="cybersecurity language:python"></option>
+        <option value="#artificial-intelligence"></option>
+        <option value="owner:microsoft terminal"></option>
+        <option value="license:mit stars:>1000"></option>
+        <option value="dedsec1121fk/TikDev"></option>
+      </datalist>
+      <button class="search-clear" id="searchClear" type="button" aria-label="Clear search" title="Clear search">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+      </button>
       <button class="search-submit" type="submit">Search</button>
     </form>
 
     <div class="header-actions">
-      <a class="icon-button" id="sourceRepositoryLink" href="https://github.com/dedsec1121fk/TikDev" target="_blank" rel="noopener noreferrer" aria-label="Open TikDev source repository">
+      <a class="icon-button" id="sourceRepositoryLink" href="https://github.com/dedsec1121fk/TikDev" target="_blank" rel="noopener noreferrer" aria-label="Open TikDev source repository" title="Source repository">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.58-.29-5.29-1.29-5.29-5.73 0-1.27.45-2.3 1.2-3.11-.12-.3-.52-1.48.11-3.07 0 0 .98-.31 3.16 1.19a10.9 10.9 0 0 1 5.75 0C17.02 4.92 18 5.23 18 5.23c.63 1.6.23 2.78.11 3.07.75.82 1.2 1.84 1.2 3.1 0 4.46-2.72 5.45-5.3 5.74.42.36.79 1.07.79 2.16v3.24c0 .31.2.67.8.56A11.5 11.5 0 0 0 12 .7Z"></path></svg>
       </a>
-      <button class="icon-button" id="themeButton" type="button" aria-label="Switch color theme">
-        <svg id="themeIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c0-.5-.04-1-.12-1.47A7 7 0 0 1 12 3Z"></path></svg>
-      </button>
-      <button class="icon-button" id="topicsButton" type="button" aria-label="Choose preferred topics">
+      <button class="icon-button" id="topicsButton" type="button" aria-label="Choose interests and categories" title="Interests and categories">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+      </button>
+      <button class="icon-button" id="musicButton" type="button" aria-label="Play background lofi music" aria-pressed="false" title="Background lofi music">
+        <svg id="musicIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle></svg>
+      </button>
+      <button class="icon-button" id="fullscreenButton" type="button" aria-label="Enter full screen" title="Enter full screen">
+        <svg id="fullscreenIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>
+      </button>
+      <button class="icon-button" id="themeButton" type="button" aria-label="Switch color theme" title="Switch color theme">
+        <svg id="themeIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c0-.5-.04-1-.12-1.47A7 7 0 0 1 12 3Z"></path></svg>
       </button>
     </div>
   </header>
 
-  <nav class="mode-bar" aria-label="Feed type">
-    <button class="mode-button active" type="button" data-mode="discover">Discover</button>
-    <button class="mode-button" type="button" data-mode="popular">Popular</button>
-    <button class="mode-button" type="button" data-mode="fresh">Fresh</button>
-    <button class="mode-button" type="button" data-mode="saved">Saved</button>
-    <span class="topic-status" id="topicStatus">All development topics</span>
-  </nav>
-
   <main class="feed" id="feed" tabindex="-1" aria-live="polite"></main>
   <div class="position-indicator" id="positionIndicator" aria-hidden="true">1 / 1</div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <aside class="music-panel" id="musicPanel" aria-label="Background music player" aria-hidden="true">
+    <div class="music-panel-header">
+      <div>
+        <strong>Focus radio</strong>
+        <span>Official Lofi Girl stream</span>
+      </div>
+      <button class="mini-button" id="hideMusic" type="button" aria-label="Hide music player">Hide</button>
+    </div>
+    <div class="music-frame" id="musicFrame" aria-live="polite">
+      <p>Press the music button to start the stream.</p>
+    </div>
+    <div class="music-panel-actions">
+      <button class="text-button" id="stopMusic" type="button">Stop music</button>
+      <a class="text-button" href="https://www.youtube.com/watch?v=5qap5aO4i9A" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a>
+    </div>
+  </aside>
 
   <dialog id="topicsDialog" aria-labelledby="topicsTitle">
     <div class="modal-header">
@@ -1183,7 +1586,19 @@
       </button>
     </div>
     <div class="modal-body">
-      <p class="modal-copy">Select a few topics to personalize Discover. TikDev stores these preferences only in this browser.</p>
+      <p class="modal-copy">Choose categories to personalize Discover. Filter the list or select any combination; preferences stay only in this browser.</p>
+      <label class="sr-only" for="topicFilter">Filter interests and categories</label>
+      <input class="topic-filter" id="topicFilter" type="search" autocomplete="off" placeholder="Filter interests and categories…">
+      <section class="github-star-settings" aria-labelledby="githubStarSettingsTitle">
+        <div class="github-star-field">
+          <label id="githubStarSettingsTitle" for="githubUsername">GitHub username for star filtering</label>
+          <input id="githubUsername" type="text" maxlength="39" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Optional, for example octocat">
+        </div>
+        <button class="text-button" id="refreshStarStatus" type="button">Check stars</button>
+        <p class="github-star-help">TikDev uses only the public GitHub starred-repositories list. No password or access token is requested.</p>
+        <p class="star-sync-status" id="starSyncStatus" role="status" aria-live="polite"></p>
+      </section>
+      <div class="selection-summary" id="selectionSummary">0 selected</div>
       <div class="topic-grid" id="topicGrid"></div>
       <div class="modal-footer">
         <button class="text-button" id="clearTopics" type="button">Clear all</button>
@@ -1216,13 +1631,66 @@
       customDomain: '__TIKDEV_CNAME__'
     });
     const PAGE_SIZE = 15;
-    const TOPICS = [
-      'android', 'artificial-intelligence', 'automation', 'bash', 'c', 'cpp', 'css',
-      'cybersecurity', 'data-science', 'devops', 'docker', 'game-development', 'go',
-      'html', 'java', 'javascript', 'kotlin', 'linux', 'machine-learning', 'mobile',
-      'nodejs', 'open-source', 'php', 'privacy', 'python', 'react', 'rust', 'security',
-      'self-hosted', 'svelte', 'swift', 'termux', 'typescript', 'web-development'
-    ];
+    const PROMOTED_REPOSITORIES = Object.freeze([
+      'dedsec1121fk/Corrupted-Files-Project',
+      'dedsec1121fk/Pocket-AI',
+      'dedsec1121fk/DedSec',
+      'dedsec1121fk/Offline-Survival-Project',
+      'dedsec1121fk/dedsec1121fk.github.io'
+    ]);
+    const PROMOTION_INTERVAL_MS = 3 * 60 * 1000;
+    const FIRST_PROMOTION_DELAY_MS = 2 * 60 * 1000;
+    const STAR_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+    const TOPIC_GROUPS = Object.freeze({
+      "Cybersecurity": [
+        "cybersecurity", "security", "ethical-hacking", "penetration-testing", "bug-bounty",
+        "osint", "digital-forensics", "reverse-engineering", "malware-analysis", "cryptography",
+        "privacy", "network-security", "web-security", "mobile-security", "ctf"
+      ],
+      "Artificial intelligence": [
+        "artificial-intelligence", "machine-learning", "deep-learning", "generative-ai",
+        "large-language-models", "natural-language-processing", "computer-vision", "chatbot",
+        "data-science", "data-visualization", "recommendation-system", "voice-assistant"
+      ],
+      "Web and apps": [
+        "web-development", "frontend", "backend", "full-stack", "api", "rest-api",
+        "progressive-web-app", "browser-extension", "mobile", "android", "ios", "desktop",
+        "accessibility", "ecommerce", "portfolio"
+      ],
+      "Programming languages": [
+        "python", "javascript", "typescript", "java", "kotlin", "swift", "go", "rust", "c",
+        "cpp", "csharp", "php", "ruby", "dart", "shell", "bash", "powershell", "lua"
+      ],
+      "Frameworks and runtimes": [
+        "react", "vue", "svelte", "angular", "nextjs", "nodejs", "deno", "django", "flask",
+        "fastapi", "spring-boot", "laravel", "flutter", "react-native", "electron"
+      ],
+      "Cloud and DevOps": [
+        "devops", "cloud", "docker", "kubernetes", "terraform", "ansible", "serverless",
+        "continuous-integration", "github-actions", "monitoring", "observability", "self-hosted",
+        "homelab", "linux", "windows", "macos"
+      ],
+      "Data and infrastructure": [
+        "database", "sql", "nosql", "postgresql", "mysql", "mongodb", "redis", "big-data",
+        "data-engineering", "web-scraping", "networking", "distributed-systems", "blockchain",
+        "web3", "internet-of-things"
+      ],
+      "Tools and automation": [
+        "automation", "cli", "terminal", "termux", "productivity", "developer-tools", "testing",
+        "code-quality", "documentation", "bots", "discord-bot", "telegram-bot", "open-source",
+        "beginner-friendly", "education"
+      ],
+      "Games, hardware and creative": [
+        "game-development", "unity", "unreal-engine", "godot", "graphics", "computer-graphics",
+        "audio", "music", "video", "creative-coding", "arduino", "raspberry-pi", "robotics",
+        "embedded-systems", "virtual-reality", "augmented-reality"
+      ],
+      "Science and society": [
+        "science", "healthcare", "finance", "climate", "geospatial", "bioinformatics",
+        "research", "civic-tech", "sustainability", "education-technology"
+      ]
+    });
+    const TOPICS = Object.freeze([...new Set(Object.values(TOPIC_GROUPS).flat())]);
 
     const LANGUAGE_COLORS = {
       JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', Java: '#b07219',
@@ -1255,16 +1723,26 @@
       saved: new Set(readJson('tikdev-saved', [])),
       activeIndex: 0,
       topicCursor: 0,
-      requestId: 0
+      requestId: 0,
+      githubUsername: readText('tikdev-github-username'),
+      starredPromoted: new Set(readJson('tikdev-promoted-starred', []).map(value => String(value).toLowerCase())),
+      promotedRepositories: new Map(),
+      promotionCursor: Number(localStorage.getItem('tikdev-promotion-cursor') || 0) || 0,
+      promotionTimer: 0,
+      promotionBusy: false
     };
 
     const feed = document.getElementById('feed');
     const searchForm = document.getElementById('searchForm');
     const searchInput = document.getElementById('searchInput');
+    const searchClear = document.getElementById('searchClear');
+    const appHeader = document.getElementById('appHeader');
     const topicStatus = document.getElementById('topicStatus');
     const positionIndicator = document.getElementById('positionIndicator');
     const topicsDialog = document.getElementById('topicsDialog');
     const topicGrid = document.getElementById('topicGrid');
+    const topicFilter = document.getElementById('topicFilter');
+    const selectionSummary = document.getElementById('selectionSummary');
     const readmeDialog = document.getElementById('readmeDialog');
     const readmeTitle = document.getElementById('readmeTitle');
     const readmeMeta = document.getElementById('readmeMeta');
@@ -1273,6 +1751,17 @@
     const sourceRepositoryLink = document.getElementById('sourceRepositoryLink');
     const canonicalUrl = document.getElementById('canonicalUrl');
     const openGraphUrl = document.getElementById('openGraphUrl');
+    const musicButton = document.getElementById('musicButton');
+    const musicIcon = document.getElementById('musicIcon');
+    const musicPanel = document.getElementById('musicPanel');
+    const musicFrame = document.getElementById('musicFrame');
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    const fullscreenIcon = document.getElementById('fullscreenIcon');
+    const githubUsernameInput = document.getElementById('githubUsername');
+    const refreshStarStatusButton = document.getElementById('refreshStarStatus');
+    const starSyncStatus = document.getElementById('starSyncStatus');
+    const openGraphImage = document.getElementById('openGraphImage');
+    const twitterImage = document.getElementById('twitterImage');
 
     function injectedValue(value) {
       const text = String(value || '').trim();
@@ -1333,6 +1822,11 @@
         openGraphUrl.setAttribute('content', SITE_URL);
       }
 
+      const imageBase = SITE_URL || document.baseURI;
+      const previewImage = new URL('dedsec-butterfly.png', imageBase).href;
+      if (!openGraphImage.content || openGraphImage.content.startsWith('__TIKDEV_')) openGraphImage.content = previewImage;
+      if (!twitterImage.content || twitterImage.content.startsWith('__TIKDEV_')) twitterImage.content = previewImage;
+
       window.__TIKDEV_SITE__ = Object.freeze({
         repository: REPOSITORY,
         repositoryUrl,
@@ -1381,6 +1875,17 @@
 
     function writeJson(key, value) {
       try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
+    }
+
+    function readObject(key, fallback = {}) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+      } catch { return fallback; }
+    }
+
+    function readText(key) {
+      try { return String(localStorage.getItem(key) || '').trim(); } catch { return ''; }
     }
 
     function escapeHtml(value = '') {
@@ -1438,25 +1943,62 @@
       resetAndLoad();
     }
 
+    function directRepositoryFromQuery(value) {
+      const raw = String(value || '').trim();
+      const urlMatch = raw.match(/^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})(?:[\/?#].*)?$/i);
+      const shortMatch = raw.match(/^@?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})$/);
+      const match = urlMatch || shortMatch;
+      return match ? `${match[1]}/${match[2].replace(/\.git$/i, '')}` : '';
+    }
+
+    function normalizeSearchQuery(value) {
+      let raw = String(value || '').trim().replace(/[<>]/g, ' ').slice(0, 160);
+      if (!raw) return '';
+      raw = raw
+        .replace(/(^|\s)#([a-z0-9][a-z0-9-]*)/gi, '$1topic:$2')
+        .replace(/(^|\s)owner:/gi, '$1user:')
+        .replace(/(^|\s)lang:/gi, '$1language:')
+        .replace(/(^|\s)@([A-Za-z0-9-]{1,39})(?=\s|$)/g, '$1user:$2');
+
+      const tokens = raw.match(/"[^"]+"|\S+/g) || [];
+      const qualifiers = [];
+      const terms = [];
+      const qualifierPattern = /^(?:user|org|topic|language|license|stars|forks|size|created|pushed|archived|fork|mirror|template|good-first-issues|help-wanted-issues):/i;
+
+      for (const token of tokens) {
+        if (qualifierPattern.test(token)) qualifiers.push(token);
+        else terms.push(token);
+      }
+
+      const termQuery = terms.join(' ');
+      return [termQuery, termQuery ? 'in:name,description,readme' : '', qualifiers.join(' ')].filter(Boolean).join(' ');
+    }
+
     function buildSearch() {
       const topicList = [...state.selectedTopics];
       const chosenTopic = topicList.length ? topicList[state.topicCursor++ % topicList.length] : '';
-      const userQuery = state.query.trim().replace(/[<>]/g, ' ').slice(0, 100);
+      const normalizedQuery = normalizeSearchQuery(state.query);
       let qualifiers = 'fork:false archived:false';
-      let sort = 'stars';
+      let sort = '';
 
-      if (state.mode === 'popular') {
+      if (normalizedQuery) {
+        // Keep typed searches broad and relevance-ranked. Users can add GitHub qualifiers directly.
+      } else if (state.mode === 'popular') {
         qualifiers += ' stars:>1000';
+        sort = 'stars';
       } else if (state.mode === 'fresh') {
         qualifiers += ` created:>=${dateDaysAgo(120)} stars:>3`;
         sort = 'updated';
       } else {
         qualifiers += ` pushed:>=${dateDaysAgo(365)} stars:>25`;
+        sort = 'stars';
       }
 
-      if (chosenTopic) qualifiers += ` topic:${chosenTopic}`;
-      const q = [userQuery, qualifiers].filter(Boolean).join(' ');
-      return `${API}/search/repositories?q=${encodeURIComponent(q)}&sort=${sort}&order=desc&per_page=${PAGE_SIZE}&page=${state.page}`;
+      if (!normalizedQuery && chosenTopic) qualifiers += ` topic:${chosenTopic}`;
+      const q = [normalizedQuery, qualifiers].filter(Boolean).join(' ');
+      const params = new URLSearchParams({ q, order: 'desc', per_page: String(PAGE_SIZE), page: String(state.page) });
+      if (sort) params.set('sort', sort);
+      return `${API}/search/repositories?${params.toString()}`;
     }
 
     function introCard() {
@@ -1466,10 +2008,10 @@
             <div class="repo-main">
               <span class="eyebrow">Open-source discovery, simplified</span>
               <h1 class="repo-title">Swipe less.<br>Discover more.</h1>
-              <p class="repo-description">TikDev turns public GitHub repositories into a clean, vertical feed. Search directly, choose topics, save interesting projects, and open their README without leaving the page.</p>
+              <p class="repo-description">TikDev turns public GitHub repositories into a clean, vertical feed. Search directly, choose interests, save interesting projects, and open their README without leaving the page.</p>
               <div class="repo-actions">
                 <button class="primary-link" type="button" data-action="next">Start exploring ${icons.external}</button>
-                <button class="secondary-button" type="button" data-action="open-topics">Choose topics</button>
+                <button class="secondary-button" type="button" data-action="open-topics">Choose interests</button>
               </div>
             </div>
           </article>
@@ -1509,21 +2051,25 @@
     }
 
     function repoCard(repo) {
-      const fullName = escapeHtml(repo.full_name);
+      const fullNameRaw = repo.full_name;
+      const fullName = escapeHtml(fullNameRaw);
       const repoUrl = safeGithubUrl(repo.html_url);
       const starUrl = `${repoUrl}/stargazers`;
       const forkUrl = `${repoUrl}/fork`;
       const language = repo.language ? escapeHtml(repo.language) : 'Unknown';
       const langColor = LANGUAGE_COLORS[repo.language] || '#8b95a7';
       const topics = (repo.topics || []).slice(0, 6);
-      const isSaved = state.saved.has(repo.full_name);
+      const isSaved = state.saved.has(fullNameRaw);
+      const isPromoted = Boolean(repo.__tikdevPromoted);
+      const isKnownStarred = state.starredPromoted.has(fullNameRaw.toLowerCase());
       const license = repo.license && repo.license.spdx_id && repo.license.spdx_id !== 'NOASSERTION' ? repo.license.spdx_id : null;
       const homepage = repo.homepage && /^https:\/\//i.test(repo.homepage) ? repo.homepage : null;
 
       return `
-        <section class="feed-card" data-kind="repo" data-repo="${fullName}">
+        <section class="feed-card ${isPromoted ? 'featured-card' : ''}" data-kind="repo" data-repo="${fullName}" ${isPromoted ? 'data-promoted="true" aria-label="DedSec Project featured repository"' : ''}>
           <article class="repo-shell">
             <div class="repo-main">
+              ${isPromoted ? '<span class="featured-label"><img src="dedsec-butterfly.png" alt="" width="18" height="18">DedSec Project pick</span>' : ''}
               <div class="repo-topline">
                 <img class="avatar" src="${escapeHtml(repo.owner.avatar_url)}" alt="" width="44" height="44" loading="lazy">
                 <div class="owner-block">
@@ -1534,6 +2080,7 @@
 
               <h2 class="repo-title">${escapeHtml(repo.name)}</h2>
               <p class="repo-description">${escapeHtml(repo.description || 'No repository description has been provided yet.')}</p>
+              ${isPromoted ? '<p class="featured-note">Featured periodically even when it is outside your selected interests. Repositories already identified as starred are excluded.</p>' : ''}
 
               <div class="repo-meta">
                 <span class="pill"><span class="language-dot" style="--lang:${langColor}"></span>${language}</span>
@@ -1554,10 +2101,13 @@
             </div>
 
             <aside class="side-actions" aria-label="Repository actions">
-              <a class="stat-action" href="${starUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${repo.stargazers_count} stars">
+              ${isPromoted ? `<button class="stat-action promo-star-button" type="button" data-action="promo-star" data-repo="${fullName}" aria-pressed="${isKnownStarred}" aria-label="${isKnownStarred ? 'Star recorded for' : 'Open GitHub to star'} ${fullNameRaw}; ${repo.stargazers_count} stars" title="${formatNumber(repo.stargazers_count)} stars">
+                <span class="stat-icon star-icon">${icons.star}</span>
+                <span class="button-label">${isKnownStarred ? 'Recorded' : 'Star'}</span>
+              </button>` : `<a class="stat-action" href="${starUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${repo.stargazers_count} stars">
                 <span class="stat-icon star-icon">${icons.star}</span>
                 <span>${formatNumber(repo.stargazers_count)}</span>
-              </a>
+              </a>`}
               <a class="stat-action" href="${forkUrl}" target="_blank" rel="noopener noreferrer" aria-label="Fork repository; ${repo.forks_count} forks">
                 <span class="stat-icon fork-icon">${icons.fork}</span>
                 <span>${formatNumber(repo.forks_count)}</span>
@@ -1613,7 +2163,11 @@
       state.loading = true;
 
       try {
-        const response = await fetch(buildSearch(), {
+        const directRepository = state.page === 1 ? directRepositoryFromQuery(state.query) : '';
+        const requestUrl = directRepository
+          ? `${API}/repos/${directRepository.split('/').map(encodeURIComponent).join('/')}`
+          : buildSearch();
+        const response = await fetch(requestUrl, {
           headers: { Accept: 'application/vnd.github+json' }
         });
 
@@ -1625,22 +2179,24 @@
             const resetText = reset ? new Date(Number(reset) * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'a few minutes';
             throw new Error(`GitHub's public API limit was reached. Try again after ${resetText}.`);
           }
-          if (response.status === 422) throw new Error('GitHub could not understand that search. Try fewer or simpler words.');
+          if (response.status === 404 && directRepository) throw new Error('That GitHub repository could not be found or is not public.');
+          if (response.status === 422) throw new Error('GitHub could not understand that search. Try fewer words or check the qualifiers.');
           throw new Error(`GitHub returned error ${response.status}.`);
         }
 
         const data = await response.json();
-        const items = (data.items || []).filter(repo => !state.seen.has(repo.full_name));
+        const rawItems = directRepository ? [data] : (data.items || []);
+        const items = rawItems.filter(repo => repo && repo.full_name && !state.seen.has(repo.full_name));
         items.forEach(repo => state.seen.add(repo.full_name));
         state.repositories.push(...items);
-        state.exhausted = items.length < PAGE_SIZE || state.repositories.length >= Math.min(data.total_count || 1000, 1000);
+        state.exhausted = Boolean(directRepository) || items.length < PAGE_SIZE || state.repositories.length >= Math.min(data.total_count || 1000, 1000);
         state.page += 1;
 
         const loadingNode = feed.querySelector('[data-kind="loading"]');
         if (loadingNode) loadingNode.remove();
 
         if (!state.repositories.length) {
-          feed.insertAdjacentHTML('beforeend', messageCard('No projects found', 'Try another search or clear some topic filters.', 'Clear search'));
+          feed.insertAdjacentHTML('beforeend', messageCard('No projects found', 'Try another search, qualifier, owner, language, or interest filter.', 'Clear search'));
         } else {
           const fragment = document.createElement('div');
           fragment.innerHTML = items.map(repoCard).join('');
@@ -1691,6 +2247,7 @@
 
     function findRepo(fullName) {
       return state.repositories.find(repo => repo.full_name === fullName)
+        || state.promotedRepositories.get(fullName)
         || readJson('tikdev-saved-repos', []).find(repo => repo.full_name === fullName);
     }
 
@@ -1754,17 +2311,258 @@
       }
     }
 
-    function renderTopicChoices() {
-      topicGrid.innerHTML = TOPICS.map(topic => `
-        <button class="topic-choice ${state.draftTopics.has(topic) ? 'selected' : ''}" type="button" data-topic-choice="${topic}" aria-pressed="${state.draftTopics.has(topic)}">${escapeHtml(prettyTopic(topic))}</button>
-      `).join('');
+    function renderTopicChoices(filter = topicFilter.value) {
+      const needle = String(filter || '').trim().toLowerCase();
+      const sections = [];
+
+      for (const [group, topics] of Object.entries(TOPIC_GROUPS)) {
+        const visible = topics.filter(topic => !needle || `${group} ${prettyTopic(topic)}`.toLowerCase().includes(needle));
+        if (!visible.length) continue;
+        sections.push(`
+          <section class="topic-section">
+            <h3>${escapeHtml(group)}</h3>
+            <div class="topic-section-options">
+              ${visible.map(topic => `
+                <button class="topic-choice ${state.draftTopics.has(topic) ? 'selected' : ''}" type="button" data-topic-choice="${topic}" aria-pressed="${state.draftTopics.has(topic)}">${escapeHtml(prettyTopic(topic))}</button>
+              `).join('')}
+            </div>
+          </section>`);
+      }
+
+      topicGrid.innerHTML = sections.join('') || '<p class="modal-copy">No matching categories.</p>';
+      selectionSummary.textContent = `${state.draftTopics.size} selected`;
     }
 
     function openTopics() {
       state.draftTopics = new Set(state.selectedTopics);
-      renderTopicChoices();
+      topicFilter.value = '';
+      githubUsernameInput.value = state.githubUsername;
+      updateStarSyncStatus();
+      renderTopicChoices('');
       topicsDialog.showModal();
+      requestAnimationFrame(() => topicFilter.focus());
     }
+
+    function normalizeRepositoryName(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function sanitizeGithubUsername(value) {
+      const username = String(value || '').trim().replace(/^@/, '');
+      return /^(?!-)(?!.*--)[A-Za-z0-9-]{1,39}(?<!-)$/.test(username) ? username : '';
+    }
+
+    function updateStarSyncStatus(message = '') {
+      if (message) {
+        starSyncStatus.textContent = message;
+        return;
+      }
+      if (!state.githubUsername) {
+        starSyncStatus.textContent = 'Add a public GitHub username to automatically exclude repositories that account has starred.';
+        return;
+      }
+      const count = PROMOTED_REPOSITORIES.filter(repo => state.starredPromoted.has(normalizeRepositoryName(repo))).length;
+      starSyncStatus.textContent = `${count} of ${PROMOTED_REPOSITORIES.length} featured repositories are currently excluded for @${state.githubUsername}.`;
+    }
+
+    function parseLastPage(linkHeader) {
+      const match = String(linkHeader || '').match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+      return match ? Math.max(1, Number(match[1]) || 1) : 1;
+    }
+
+    async function fetchStarredPromotionMatches(username) {
+      const matched = new Set();
+      const target = new Set(PROMOTED_REPOSITORIES.map(normalizeRepositoryName));
+      const firstUrl = `${API}/users/${encodeURIComponent(username)}/starred?per_page=100&page=1&sort=created&direction=desc`;
+      const firstResponse = await fetch(firstUrl, { headers: { Accept: 'application/vnd.github+json' } });
+      if (firstResponse.status === 404) throw new Error('That public GitHub username was not found.');
+      if (!firstResponse.ok) throw new Error(firstResponse.status === 403 ? 'GitHub API limit reached; try the star check again later.' : `GitHub returned error ${firstResponse.status}.`);
+
+      const inspect = repos => {
+        for (const repo of repos || []) {
+          const name = normalizeRepositoryName(repo && repo.full_name);
+          if (target.has(name)) matched.add(name);
+        }
+      };
+
+      const firstItems = await firstResponse.json();
+      inspect(firstItems);
+      const lastPage = parseLastPage(firstResponse.headers.get('link'));
+      if (matched.size === target.size || lastPage <= 1) return matched;
+
+      const pages = new Set();
+      if (lastPage <= 8) {
+        for (let page = 2; page <= lastPage; page += 1) pages.add(page);
+      } else {
+        [2, 3, 4, lastPage - 2, lastPage - 1, lastPage].forEach(page => {
+          if (page > 1 && page <= lastPage) pages.add(page);
+        });
+      }
+
+      for (const page of pages) {
+        if (matched.size === target.size) break;
+        const response = await fetch(`${API}/users/${encodeURIComponent(username)}/starred?per_page=100&page=${page}&sort=created&direction=desc`, {
+          headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!response.ok) continue;
+        inspect(await response.json());
+      }
+      return matched;
+    }
+
+    function removeStarredPromotionCards() {
+      feed.querySelectorAll('[data-promoted="true"]').forEach(card => {
+        if (state.starredPromoted.has(normalizeRepositoryName(card.dataset.repo))) {
+          state.promotedRepositories.delete(card.dataset.repo);
+          card.remove();
+        }
+      });
+      observeCards();
+      updatePosition();
+    }
+
+    async function refreshPromotedStarStatus(force = false) {
+      const username = sanitizeGithubUsername(state.githubUsername);
+      const locallyRecorded = new Set(readJson('tikdev-promoted-starred', []).map(normalizeRepositoryName));
+      state.starredPromoted = new Set(locallyRecorded);
+
+      if (!username) {
+        updateStarSyncStatus();
+        return;
+      }
+
+      const cache = readObject('tikdev-star-cache', {});
+      if (!force && cache.username === username.toLowerCase() && Date.now() - Number(cache.checkedAt || 0) < STAR_CACHE_TTL_MS) {
+        for (const repo of Array.isArray(cache.repositories) ? cache.repositories : []) state.starredPromoted.add(normalizeRepositoryName(repo));
+        updateStarSyncStatus();
+        removeStarredPromotionCards();
+        return;
+      }
+
+      updateStarSyncStatus(`Checking @${username}'s public stars…`);
+      refreshStarStatusButton.disabled = true;
+      try {
+        const matches = await fetchStarredPromotionMatches(username);
+        for (const repo of matches) state.starredPromoted.add(repo);
+        try {
+          localStorage.setItem('tikdev-star-cache', JSON.stringify({
+            username: username.toLowerCase(),
+            checkedAt: Date.now(),
+            repositories: [...matches]
+          }));
+        } catch { /* private mode */ }
+        updateStarSyncStatus();
+        removeStarredPromotionCards();
+      } catch (error) {
+        updateStarSyncStatus(error.message || 'Could not check public starred repositories.');
+      } finally {
+        refreshStarStatusButton.disabled = false;
+      }
+    }
+
+    function markPromotedRepositoryStarred(fullName) {
+      const normalized = normalizeRepositoryName(fullName);
+      if (!PROMOTED_REPOSITORIES.some(repo => normalizeRepositoryName(repo) === normalized)) return;
+      state.starredPromoted.add(normalized);
+      const local = new Set(readJson('tikdev-promoted-starred', []).map(normalizeRepositoryName));
+      local.add(normalized);
+      writeJson('tikdev-promoted-starred', [...local]);
+      updateStarSyncStatus();
+      document.querySelectorAll(`[data-action="promo-star"][data-repo="${CSS.escape(fullName)}"]`).forEach(button => {
+        button.setAttribute('aria-pressed', 'true');
+        const label = button.querySelector('.button-label');
+        if (label) label.textContent = 'Star recorded';
+      });
+      setTimeout(removeStarredPromotionCards, 700);
+    }
+
+    function eligiblePromotedRepositories() {
+      return PROMOTED_REPOSITORIES.filter(repo => !state.starredPromoted.has(normalizeRepositoryName(repo)));
+    }
+
+    async function fetchPromotedRepository(fullName) {
+      if (state.promotedRepositories.has(fullName)) return state.promotedRepositories.get(fullName);
+      const response = await fetch(`${API}/repos/${fullName.split('/').map(encodeURIComponent).join('/')}`, {
+        headers: { Accept: 'application/vnd.github+json' }
+      });
+      if (!response.ok) throw new Error(`GitHub returned error ${response.status}.`);
+      const repo = await response.json();
+      repo.__tikdevPromoted = true;
+      state.promotedRepositories.set(fullName, repo);
+      return repo;
+    }
+
+    async function injectPromotedRepository() {
+      if (state.promotionBusy || state.mode === 'saved' || document.hidden) return false;
+      const eligible = eligiblePromotedRepositories();
+      if (!eligible.length) {
+        removeStarredPromotionCards();
+        return false;
+      }
+
+      const existingPromotion = feed.querySelector('[data-promoted="true"]');
+      if (existingPromotion) {
+        const cards = [...feed.querySelectorAll('.feed-card')];
+        if (cards.indexOf(existingPromotion) === state.activeIndex) return false;
+        state.promotedRepositories.delete(existingPromotion.dataset.repo);
+        existingPromotion.remove();
+      }
+
+      const displayed = new Set([...feed.querySelectorAll('[data-repo]')].map(card => normalizeRepositoryName(card.dataset.repo)));
+      let candidates = eligible.filter(repo => !displayed.has(normalizeRepositoryName(repo)));
+      if (!candidates.length) candidates = eligible;
+
+      const selected = candidates[state.promotionCursor % candidates.length];
+      state.promotionCursor = (state.promotionCursor + 1) % 100000;
+      try { localStorage.setItem('tikdev-promotion-cursor', String(state.promotionCursor)); } catch { /* private mode */ }
+
+      state.promotionBusy = true;
+      try {
+        const repo = await fetchPromotedRepository(selected);
+        if (state.starredPromoted.has(normalizeRepositoryName(selected)) || state.mode === 'saved') return false;
+
+        const template = document.createElement('template');
+        template.innerHTML = repoCard(repo).trim();
+        const card = template.content.firstElementChild;
+        const cards = [...feed.querySelectorAll('.feed-card')];
+        const activeCard = cards[Math.max(0, Math.min(state.activeIndex, cards.length - 1))];
+        const nextCard = activeCard && activeCard.nextElementSibling;
+        if (nextCard && nextCard.dataset.kind === 'loading') nextCard.before(card);
+        else if (activeCard) activeCard.after(card);
+        else feed.appendChild(card);
+        observeCards();
+        updatePosition();
+        return true;
+      } catch {
+        return false;
+      } finally {
+        state.promotionBusy = false;
+      }
+    }
+
+    function scheduleNextPromotion(delay = PROMOTION_INTERVAL_MS) {
+      clearTimeout(state.promotionTimer);
+      const safeDelay = Math.max(15000, Number(delay) || PROMOTION_INTERVAL_MS);
+      try { localStorage.setItem('tikdev-next-promotion-at', String(Date.now() + safeDelay)); } catch { /* private mode */ }
+      state.promotionTimer = window.setTimeout(async () => {
+        await injectPromotedRepository();
+        scheduleNextPromotion(PROMOTION_INTERVAL_MS);
+      }, safeDelay);
+    }
+
+    function startPromotionSchedule() {
+      const stored = Number(readText('tikdev-next-promotion-at'));
+      const delay = Number.isFinite(stored) && stored > Date.now()
+        ? Math.min(PROMOTION_INTERVAL_MS, stored - Date.now())
+        : FIRST_PROMOTION_DELAY_MS;
+      scheduleNextPromotion(delay);
+    }
+
+    window.__TIKDEV_PROMOTION__ = Object.freeze({
+      injectNow: injectPromotedRepository,
+      refreshStars: () => refreshPromotedStarStatus(true),
+      repositories: PROMOTED_REPOSITORIES
+    });
 
     function showToast(message) {
       toast.textContent = message;
@@ -1773,9 +2571,23 @@
       showToast.timer = setTimeout(() => toast.classList.remove('visible'), 2200);
     }
 
+    function updateSearchClear() {
+      searchClear.classList.toggle('visible', Boolean(searchInput.value));
+    }
+
+    searchInput.addEventListener('input', updateSearchClear);
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      state.query = '';
+      updateSearchClear();
+      searchInput.focus();
+      if (state.mode !== 'saved') resetAndLoad();
+    });
+
     searchForm.addEventListener('submit', event => {
       event.preventDefault();
       state.query = searchInput.value.trim();
+      updateSearchClear();
       if (state.mode === 'saved') setMode('discover');
       else resetAndLoad();
     });
@@ -1785,6 +2597,7 @@
     });
 
     document.getElementById('topicsButton').addEventListener('click', openTopics);
+    topicFilter.addEventListener('input', () => renderTopicChoices());
     document.getElementById('clearTopics').addEventListener('click', () => {
       state.draftTopics.clear();
       renderTopicChoices();
@@ -1792,10 +2605,32 @@
     document.getElementById('saveTopics').addEventListener('click', () => {
       state.selectedTopics = new Set(state.draftTopics);
       writeJson('tikdev-topics', [...state.selectedTopics]);
+      const username = sanitizeGithubUsername(githubUsernameInput.value);
+      state.githubUsername = username;
+      try {
+        if (username) localStorage.setItem('tikdev-github-username', username);
+        else localStorage.removeItem('tikdev-github-username');
+      } catch { /* private mode */ }
       updateTopicStatus();
       topicsDialog.close();
+      refreshPromotedStarStatus(true);
       if (state.mode === 'saved') setMode('discover');
       else resetAndLoad();
+    });
+
+    refreshStarStatusButton.addEventListener('click', async () => {
+      const username = sanitizeGithubUsername(githubUsernameInput.value);
+      if (!username && githubUsernameInput.value.trim()) {
+        updateStarSyncStatus('Enter a valid GitHub username.');
+        githubUsernameInput.focus();
+        return;
+      }
+      state.githubUsername = username;
+      try {
+        if (username) localStorage.setItem('tikdev-github-username', username);
+        else localStorage.removeItem('tikdev-github-username');
+      } catch { /* private mode */ }
+      await refreshPromotedStarStatus(true);
     });
 
     topicGrid.addEventListener('click', event => {
@@ -1805,6 +2640,7 @@
       state.draftTopics.has(topic) ? state.draftTopics.delete(topic) : state.draftTopics.add(topic);
       button.classList.toggle('selected', state.draftTopics.has(topic));
       button.setAttribute('aria-pressed', String(state.draftTopics.has(topic)));
+      selectionSummary.textContent = `${state.draftTopics.size} selected`;
     });
 
     document.querySelectorAll('[data-close]').forEach(button => {
@@ -1830,6 +2666,11 @@
         resetAndLoad();
       }
       else if (action === 'readme') openReadme(target.dataset.repo);
+      else if (action === 'promo-star') {
+        const repo = findRepo(target.dataset.repo);
+        if (repo) window.open(repo.html_url, '_blank', 'noopener,noreferrer');
+        markPromotedRepositoryStarred(target.dataset.repo);
+      }
       else if (action === 'save') saveRepo(target.dataset.repo);
       else if (action === 'share') shareRepo(target.dataset.repo);
       else if (action === 'topic') {
@@ -1849,7 +2690,80 @@
       if (['ArrowDown', 'PageDown', 'j', 'J'].includes(event.key)) { event.preventDefault(); scrollToCard(1); }
       if (['ArrowUp', 'PageUp', 'k', 'K'].includes(event.key)) { event.preventDefault(); scrollToCard(-1); }
       if (event.key === '/') { event.preventDefault(); searchInput.focus(); }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchInput.focus(); }
     });
+
+    function syncNavigationHeight() {
+      const height = Math.ceil(appHeader.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--nav-h', `${height}px`);
+    }
+
+    const navResizeObserver = new ResizeObserver(syncNavigationHeight);
+    navResizeObserver.observe(appHeader);
+    addEventListener('resize', syncNavigationHeight, { passive: true });
+    syncNavigationHeight();
+
+    function updateFullscreenButton() {
+      const active = Boolean(document.fullscreenElement);
+      fullscreenButton.setAttribute('aria-label', active ? 'Exit full screen' : 'Enter full screen');
+      fullscreenButton.setAttribute('title', active ? 'Exit full screen' : 'Enter full screen');
+      fullscreenButton.setAttribute('aria-pressed', String(active));
+      fullscreenIcon.innerHTML = active
+        ? '<path d="M9 9H4V4M15 9h5V4M9 15H4v5M15 15h5v5"></path>'
+        : '<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path>';
+    }
+
+    if (!document.documentElement.requestFullscreen) fullscreenButton.hidden = true;
+    fullscreenButton.addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      } catch {
+        showToast('Full screen is not available in this browser');
+      }
+    });
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    updateFullscreenButton();
+
+    let musicStarted = false;
+    function showMusicPanel(show) {
+      musicPanel.classList.toggle('visible', show);
+      musicPanel.setAttribute('aria-hidden', String(!show));
+    }
+
+    function startMusic() {
+      if (!musicStarted) {
+        const iframe = document.createElement('iframe');
+        iframe.title = 'Lofi Girl background music';
+        iframe.src = 'https://www.youtube-nocookie.com/embed/5qap5aO4i9A?autoplay=1&controls=1&playsinline=1&rel=0';
+        iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.allowFullscreen = true;
+        musicFrame.replaceChildren(iframe);
+        musicStarted = true;
+        musicButton.setAttribute('aria-pressed', 'true');
+        musicButton.setAttribute('aria-label', 'Show background music player');
+        musicIcon.innerHTML = '<path d="M4 15v-6M8 18V6M12 16V8M16 19V5M20 15V9"></path>';
+      }
+      showMusicPanel(true);
+    }
+
+    function stopMusic() {
+      musicFrame.innerHTML = '<p>Press the music button to start the stream.</p>';
+      musicStarted = false;
+      musicButton.setAttribute('aria-pressed', 'false');
+      musicButton.setAttribute('aria-label', 'Play background lofi music');
+      musicIcon.innerHTML = '<path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle>';
+      showMusicPanel(false);
+      showToast('Background music stopped');
+    }
+
+    musicButton.addEventListener('click', () => {
+      if (!musicStarted) startMusic();
+      else showMusicPanel(!musicPanel.classList.contains('visible'));
+    });
+    document.getElementById('hideMusic').addEventListener('click', () => showMusicPanel(false));
+    document.getElementById('stopMusic').addEventListener('click', stopMusic);
 
     const themeButton = document.getElementById('themeButton');
     const themeIcon = document.getElementById('themeIcon');
@@ -1874,9 +2788,21 @@
       localStorage.setItem('tikdev-theme', theme);
     });
 
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      const nextAt = Number(readText('tikdev-next-promotion-at'));
+      if (Number.isFinite(nextAt) && nextAt <= Date.now()) {
+        injectPromotedRepository().finally(() => scheduleNextPromotion(PROMOTION_INTERVAL_MS));
+      }
+    });
+
+    githubUsernameInput.value = state.githubUsername;
+    updateSearchClear();
     updateTopicStatus();
+    updateStarSyncStatus();
     renderInitial();
     loadMore(true, state.requestId);
+    refreshPromotedStarStatus(false).finally(startPromotionSchedule);
   </script>
 </body>
 </html>

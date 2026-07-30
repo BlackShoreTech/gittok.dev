@@ -1,74 +1,41 @@
 # TikDev
 
-TikDev is a mobile-first, swipeable browser for discovering public GitHub repositories.
+TikDev is a portable, English-only GitHub Pages application for discovering public open-source repositories in a swipeable feed.
 
-## Portable GitHub Pages deployment
+## Files
 
-TikDev does not hardcode one owner, repository path, or website address.
+- `index.html` — complete interface, styles, search, feed logic, preferences, fullscreen controls, and optional music player
+- `dedsec-butterfly.png` — DedSec Project butterfly used as the favicon and social/embed preview image
+- `.github/workflows/pages.yml` — fork-safe GitHub Pages deployment
+- `LICENSE` — project license
 
-The included GitHub Pages workflow automatically resolves:
+## DedSec Project repository rotation
 
-1. A valid domain from `CNAME`, when that optional file exists.
-2. Otherwise, the GitHub Pages base URL reported by GitHub for the current repository.
-3. As a final fallback, `https://OWNER.github.io/REPOSITORY/`, or `https://OWNER.github.io/` for an account Pages repository.
+Every three minutes TikDev can place one of these repositories near the visitor's current position in Discover, Popular, Fresh, or search feeds:
 
-The workflow injects the current fork's `OWNER/REPOSITORY` and resolved site URL into the deployed copy of `index.html`. The website also detects its URL from the browser, so it remains usable when published directly from a branch.
+- `dedsec1121fk/Corrupted-Files-Project`
+- `dedsec1121fk/Pocket-AI`
+- `dedsec1121fk/DedSec`
+- `dedsec1121fk/Offline-Survival-Project`
+- `dedsec1121fk/dedsec1121fk.github.io`
 
-## Minimal structure
+The rotation ignores interest filters. It keeps at most one featured card in the feed at a time and does not run in the Saved feed.
 
-- `index.html` — the complete website, including HTML, CSS, JavaScript, and runtime URL fallback
-- `.github/workflows/pages.yml` — portable GitHub Pages deployment and URL injection
-- `README.md` — documentation
-- `LICENSE` — original license and required attribution
-- `CNAME` — optional; add only when using a custom domain
+A static website cannot read the visitor's private GitHub login session. For accurate filtering, the visitor can enter a public GitHub username under **Interests and categories**. TikDev then checks that account's public starred-repository list without requesting a password or token. Selecting **Open to star** also records that repository locally so it is not promoted again in that browser.
 
-There is no package manager, framework, database, generated dependency folder, or separate build script.
+## Search
 
-## Features
+TikDev supports normal terms, repository URLs, `owner/repository`, `#topic`, and GitHub qualifiers such as `owner:`, `language:`, `license:`, and `stars:`. Normal terms search repository names, descriptions, and README content.
 
-- Full-screen vertical project feed
-- Discover, Popular, Fresh, and Saved feeds
-- GitHub repository search
-- Topic-based personalization saved locally in the browser
-- Repository statistics, topics, license, homepage, and update time
-- Plain-text README preview loaded only when requested
-- Browser-local saved projects
-- Native sharing or clipboard fallback
-- DedSec Project dark and light color themes
-- Keyboard navigation with arrow keys, Page Up/Down, J/K, and `/` for search
-- Adaptive layout for phones, tablets, foldables, laptops, desktops, ultrawide screens, and short landscape displays
-- English-only interface
-- No tracking or analytics
+## GitHub Pages
 
-## Enable GitHub Pages
+1. Upload all files and folders to the repository root.
+2. Open **Settings → Pages**.
+3. Select **GitHub Actions** as the source.
+4. Run the deployment workflow or push to the repository's default branch.
 
-After uploading or forking the repository:
-
-1. Open **Settings → Pages**.
-2. Under **Build and deployment**, choose **GitHub Actions**.
-3. Open **Actions** and enable workflows if GitHub has disabled them in the fork.
-4. Push to the repository's default branch, or run **Deploy TikDev to GitHub Pages** manually.
-
-The workflow runs only for the current repository's default branch, so forks using a branch name other than `main` still work.
-
-## Optional custom domain
-
-Configure the custom domain in **Settings → Pages**. You may also create a root `CNAME` file containing only the hostname, for example:
-
-```text
-example.com
-```
-
-When `CNAME` exists, TikDev uses it for canonical metadata and the workflow's detected site address. The deployment environment still uses the final URL returned by GitHub Pages.
-
-## API limits
-
-TikDev uses GitHub's public REST API directly from the browser. Unauthenticated requests are rate-limited by GitHub. The interface shows an error when that limit is reached.
+The workflow detects the current fork, default branch, GitHub Pages base URL, and optional `CNAME`. It also generates the correct absolute Open Graph and Twitter preview-image URL.
 
 ## Privacy
 
-TikDev sends search and repository requests directly to GitHub. Topic choices, theme, and saved projects stay in browser local storage. This version contains no analytics, cookies, accounts, or backend.
-
-## Credits and license
-
-This project was rebuilt as a minimal static derivative of the original GitTok project. The upstream copyright and non-commercial license are preserved in `LICENSE`.
+TikDev has no analytics, account system, advertising tracker, or database. Interests, saved repositories, optional GitHub username, promotion timing, and locally recorded stars stay in browser storage. Repository content and public star lists are requested directly from GitHub's public API. The optional focus-radio player contacts YouTube only after the visitor starts it.
