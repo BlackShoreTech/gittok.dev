@@ -1,6 +1,284 @@
 @import 'tailwindcss';
 
-/* Global dark theme styles */
-body {
-    @apply bg-gradient-to-b from-gray-900 to-black min-h-screen text-gray-200;
+/* Self-hosted variable fonts — no CDN, no FOUT on a scroll-critical surface */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* ---------------------------------------------------------------------------
+   Design tokens
+   One neutral ramp ("ink"), one accent, one meaning-colour per concept.
+   Anything not defined here should not appear in a component.
+--------------------------------------------------------------------------- */
+@theme {
+	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+	/* Neutral ramp — blue-tinted near-black, tuned for OLED and long sessions */
+	--color-ink-950: #06070b;
+	--color-ink-900: #0a0c12;
+	--color-ink-850: #0f1219;
+	--color-ink-800: #141821;
+	--color-ink-750: #1a1f2a;
+	--color-ink-700: #222834;
+	--color-ink-600: #2e3542;
+	--color-ink-500: #414a5a;
+	--color-ink-400: #5d6878;
+	--color-ink-300: #8891a1;
+	--color-ink-200: #b3bac7;
+	--color-ink-100: #dbdfe7;
+	--color-ink-50: #f3f5f8;
+
+	/* Accent — reserved for brand moments and the single primary action */
+	--color-accent-300: #b6a6ff;
+	--color-accent-400: #9b86ff;
+	--color-accent-500: #7c5cff;
+	--color-accent-600: #6438f5;
+
+	/* Meaning colours — each owns exactly one concept */
+	--color-spark: #f0b429; /* stars, and only stars */
+	--color-signal: #4bc0a8; /* fresh / active */
+	--color-danger: #f2657a;
+
+	--radius-card: 1.25rem;
+	--radius-panel: 0.875rem;
+	--radius-pill: 9999px;
+
+	--shadow-lift: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 18px 50px -12px rgb(0 0 0 / 0.7);
+	--shadow-pop: 0 12px 32px -8px rgb(124 92 255 / 0.45);
+
+	--ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+@layer base {
+	html {
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	body {
+		@apply bg-ink-950 text-ink-100 min-h-screen font-sans antialiased;
+		font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss03';
+		text-rendering: optimizeLegibility;
+	}
+
+	/* Headings are tight and confident — the single biggest "designed" tell */
+	h1,
+	h2,
+	h3 {
+		letter-spacing: -0.02em;
+	}
+
+	:focus-visible {
+		@apply outline-accent-400 outline-2 outline-offset-2;
+	}
+
+	::selection {
+		background: color-mix(in oklab, var(--color-accent-500) 40%, transparent);
+		color: var(--color-ink-50);
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Utilities
+--------------------------------------------------------------------------- */
+@utility no-scrollbar {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Fades content out at the bottom instead of guillotining it */
+@utility mask-fade-b {
+	mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+}
+
+@utility surface {
+	background-color: color-mix(in oklab, var(--color-ink-800) 88%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-ink-50) 9%, transparent);
+	backdrop-filter: blur(16px);
+}
+
+/* ---------------------------------------------------------------------------
+   README rendering
+   Replaces the CDN github-markdown-css, which never matched the container
+   class and therefore never applied. Scoped to .readme-content only.
+--------------------------------------------------------------------------- */
+@layer components {
+	.readme-content {
+		font-size: 0.9375rem;
+		line-height: 1.7;
+		color: var(--color-ink-200);
+		overflow-wrap: anywhere;
+	}
+
+	.readme-content > :first-child {
+		margin-top: 0;
+	}
+
+	.readme-content h1,
+	.readme-content h2,
+	.readme-content h3,
+	.readme-content h4,
+	.readme-content h5,
+	.readme-content h6 {
+		color: var(--color-ink-50);
+		font-weight: 600;
+		line-height: 1.25;
+		letter-spacing: -0.015em;
+		margin: 1.75em 0 0.6em;
+	}
+
+	.readme-content h1 {
+		font-size: 1.5rem;
+		padding-bottom: 0.4em;
+		border-bottom: 1px solid color-mix(in oklab, var(--color-ink-50) 10%, transparent);
+	}
+	.readme-content h2 {
+		font-size: 1.25rem;
+		padding-bottom: 0.35em;
+		border-bottom: 1px solid color-mix(in oklab, var(--color-ink-50) 8%, transparent);
+	}
+	.readme-content h3 {
+		font-size: 1.0625rem;
+	}
+	.readme-content h4,
+	.readme-content h5,
+	.readme-content h6 {
+		font-size: 0.9375rem;
+		color: var(--color-ink-100);
+	}
+
+	.readme-content p,
+	.readme-content ul,
+	.readme-content ol,
+	.readme-content blockquote,
+	.readme-content table,
+	.readme-content pre {
+		margin: 0.9em 0;
+	}
+
+	.readme-content a {
+		color: var(--color-accent-300);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		text-decoration-color: color-mix(in oklab, var(--color-accent-300) 35%, transparent);
+	}
+	.readme-content a:hover {
+		text-decoration-color: currentColor;
+	}
+
+	.readme-content strong {
+		color: var(--color-ink-50);
+		font-weight: 600;
+	}
+
+	.readme-content ul,
+	.readme-content ol {
+		padding-left: 1.4em;
+	}
+	.readme-content ul {
+		list-style: disc;
+	}
+	.readme-content ol {
+		list-style: decimal;
+	}
+	.readme-content li {
+		margin: 0.3em 0;
+	}
+	.readme-content li::marker {
+		color: var(--color-ink-400);
+	}
+
+	.readme-content code {
+		font-family: var(--font-mono);
+		font-size: 0.85em;
+		color: var(--color-accent-300);
+		background: color-mix(in oklab, var(--color-ink-50) 7%, transparent);
+		padding: 0.15em 0.4em;
+		border-radius: 0.35rem;
+	}
+
+	.readme-content pre {
+		background: var(--color-ink-950);
+		border: 1px solid color-mix(in oklab, var(--color-ink-50) 7%, transparent);
+		border-radius: var(--radius-panel);
+		padding: 0.9rem 1rem;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.readme-content pre::-webkit-scrollbar {
+		display: none;
+	}
+	.readme-content pre code {
+		background: none;
+		padding: 0;
+		color: var(--color-ink-200);
+		font-size: 0.8125rem;
+		line-height: 1.6;
+	}
+
+	.readme-content blockquote {
+		border-left: 3px solid var(--color-accent-500);
+		padding-left: 0.9rem;
+		color: var(--color-ink-300);
+		font-style: normal;
+	}
+
+	.readme-content hr {
+		border: 0;
+		border-top: 1px solid color-mix(in oklab, var(--color-ink-50) 9%, transparent);
+		margin: 1.5em 0;
+	}
+
+	.readme-content table {
+		display: block;
+		width: max-content;
+		max-width: 100%;
+		overflow-x: auto;
+		border-collapse: collapse;
+		font-size: 0.875rem;
+		scrollbar-width: none;
+	}
+	.readme-content th,
+	.readme-content td {
+		border: 1px solid color-mix(in oklab, var(--color-ink-50) 10%, transparent);
+		padding: 0.45rem 0.7rem;
+		text-align: left;
+	}
+	.readme-content th {
+		background: color-mix(in oklab, var(--color-ink-50) 5%, transparent);
+		color: var(--color-ink-50);
+		font-weight: 600;
+	}
+
+	.readme-content img {
+		display: inline-block;
+		max-width: 100%;
+		border-radius: 0.5rem;
+	}
+
+	/* Badge rows (shields.io etc.) are ubiquitous in READMEs — keep them inline
+	   and small so they read as one texture rather than a stack of blocks. */
+	.readme-content img[src*='shields.io'],
+	.readme-content img[src*='badge'],
+	.readme-content img[height='20'] {
+		display: inline;
+		height: 1.25rem;
+		width: auto;
+		border-radius: 0.25rem;
+		vertical-align: middle;
+		margin: 0.1rem 0.15rem 0.1rem 0;
+	}
+
+	.readme-content .marked-emoji-img {
+		display: inline-block;
+		height: 1.1em;
+		width: 1.1em;
+		vertical-align: -0.15em;
+		margin: 0;
+	}
 }

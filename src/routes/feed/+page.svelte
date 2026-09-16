@@ -1,6 +1,7 @@
 <!--
-  Purpose: Homepage with TikTok-style vertical scrolling for GitHub projects
-  Context: Main landing page that showcases interesting GitHub repositories in a scrollable format
+  Purpose: The feed — one repository per screen, endlessly scrollable
+  Context: The core product surface. Everything here serves one job: let someone
+           judge a repository in a few seconds and move on without friction.
 -->
 
 <script lang="ts">
@@ -12,360 +13,331 @@
 	import { Octokit } from '@octokit/rest';
 	import { baseUrl } from 'marked-base-url';
 	import { markedEmoji } from 'marked-emoji';
-	import { Globe, Settings } from 'lucide-svelte';
+	import { Info, SlidersHorizontal, ChevronDown, RefreshCw } from 'lucide-svelte';
 	import type { FeedProject } from '$lib/github/feed';
-	import { fetchProject, fetchReadme, getRandomSearchQuery, languageColors, searchRepositories } from '$lib/github/feed';
-	
-	// Import our new components
-	import RepoCard from '$lib/components/RepoCard.svelte';
-	import PromotedRepoCard from '$lib/components/PromotedRepoCard.svelte';
-	import SpecialMessageCard from '$lib/components/SpecialMessageCard.svelte';
+	import {
+		fetchProject,
+		fetchReadme,
+		getRandomSearchQuery,
+		searchRepositories
+	} from '$lib/github/feed';
 
-	let projects: FeedProject[] = [];
-	let viewedIndices = new Set<number>();
-	let isLoading = false;
-	let hasMore = true;
+	import RepoCard from '$lib/components/RepoCard.svelte';
+	import SpecialMessageCard from '$lib/components/SpecialMessageCard.svelte';
+	import FeedCardSkeleton from '$lib/components/FeedCardSkeleton.svelte';
+	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
+
+	const FOLLOW_CARD = '-1';
+	const PROMOTED_CARD = '-2';
+	const FEATURED_CTA_CARD = '-4';
+
+	let projects = $state<FeedProject[]>([]);
+	let viewedCount = $state(0);
+	let isLoading = $state(false);
+	let loadError = $state<string | null>(null);
+	let showScrollHint = $state(true);
+	let scroller = $state<HTMLElement | null>(null);
+
+	const viewedIndices = new Set<number>();
 	let hasShownFollowMessage = false;
 	let hasShownFeaturedMessage = false;
 	let featuredRepos: FeedProject[] = [];
-
 	let seenQueries: Record<string, { current_page: number; total_projects: number }> = {};
 
-	// Function to load more projects and randomly merge them after the current index
+	const topicLabel = $derived(
+		$topicsStore.size > 0
+			? `${$topicsStore.size} topic${$topicsStore.size === 1 ? '' : 's'}`
+			: 'All topics'
+	);
+
+	/* --------------------------------------------------------------------- *
+	 * Loading
+	 * --------------------------------------------------------------------- */
+
+	const nextQuery = () =>
+		getRandomSearchQuery($topicsStore.size > 0 ? [...$topicsStore] : allTopics, seenQueries);
+
 	const loadMoreProjects = async (index: number) => {
-		if (isLoading || !hasMore) return;
+		if (isLoading) return;
 
 		isLoading = true;
 		try {
 			const octokit = new Octokit();
-			const query = getRandomSearchQuery(
-				$topicsStore.size > 0 ? [...$topicsStore] : allTopics,
-				seenQueries
-			);
-			const queryKey = query.get('q');
+			const newProjects = await searchRepositories(octokit, nextQuery().toString());
+			if (!newProjects.length) return;
 
-			if (!queryKey) {
-				throw new Error('No query key found');
+			// Shuffle incoming repos into what's left ahead of the reader, so the
+			// feed never settles into visible topic-shaped blocks.
+			const combined = [...projects.slice(index + 1), ...newProjects];
+			for (let i = combined.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[combined[i], combined[j]] = [combined[j], combined[i]];
 			}
 
-			const newProjects = await searchRepositories(octokit, query.toString());
-
-			// Split existing projects into before and after index
-			const beforeProjects = projects.slice(0, index + 1);
-			const afterProjects = projects.slice(index + 1);
-
-			// Randomly merge new projects with remaining projects after index
-			const mergedProjects = [];
-			const combined = [...afterProjects, ...newProjects];
-
-			while (combined.length > 0) {
-				const randomIndex = Math.floor(Math.random() * combined.length);
-				mergedProjects.push(combined.splice(randomIndex, 1)[0]);
-			}
-
-			// Combine all parts
-			projects = [...beforeProjects, ...mergedProjects];
+			projects = [...projects.slice(0, index + 1), ...combined];
+			loadError = null;
 		} catch (error) {
 			console.error('Error loading more projects:', error);
+			// Only surface an error when there is nothing to read; mid-feed failures
+			// are silent because the reader still has cards ahead of them.
+			if (!projects.length) loadError = describeError(error);
 		} finally {
 			isLoading = false;
 		}
 	};
 
-	function seturlparams(project: FeedProject) {
+	const describeError = (error: unknown) =>
+		error instanceof Error && /rate limit/i.test(error.message)
+			? "GitHub's rate limit is maxed out for your network. It resets within the hour."
+			: "Couldn't reach GitHub. Check your connection and try again.";
+
+	const loadReadme = async (index: number) => {
+		const project = projects[index];
+		if (!project || project.readmeSnippet || project.readmeError) return;
+
+		try {
+			project.readmeSnippet = await fetchReadme(
+				project.full_name.split('/')[0],
+				project.name,
+				project.default_branch
+			);
+			project.readmeError = false;
+		} catch {
+			project.readmeError = true;
+		}
+	};
+
+	const retryReadme = (index: number) => {
+		projects[index].readmeError = false;
+		loadReadme(index);
+	};
+
+	const loadFeaturedRepos = async (): Promise<FeedProject[]> => {
+		try {
+			const response = await fetch('/data/featured_repos.json');
+			if (!response.ok) throw new Error(`Failed to fetch featured repos: ${response.status}`);
+
+			const data = await response.json();
+			return data.map((repo: Record<string, never>): FeedProject => ({
+				id: PROMOTED_CARD,
+				name: repo.name,
+				full_name: repo.full_name,
+				description: repo.description || '',
+				html_url: repo.html_url,
+				language: repo.language,
+				stargazers_count: repo.stargazers_count ?? 0,
+				fork: 0,
+				forks_count: repo.forks_count ?? 0,
+				topics: repo.topics ?? [],
+				created_at: repo.created_at,
+				updated_at: repo.pushed_at ?? repo.updated_at,
+				is_pinned: repo.is_pinned,
+				owner_id: repo.owner_id,
+				fetched_at: repo.fetched_at,
+				readmeSnippet: null,
+				avatar: repo.avatar_url,
+				stargazersUrl: `${repo.html_url}/stargazers`,
+				forksUrl: `${repo.html_url}/fork`,
+				default_branch: repo.default_branch
+			}));
+		} catch (error) {
+			console.error('Error loading featured repos:', error);
+			return [];
+		}
+	};
+
+	/* --------------------------------------------------------------------- *
+	 * Interjected cards
+	 * --------------------------------------------------------------------- */
+
+	const insertAfter = (index: number, card: FeedProject) => {
+		projects = [...projects.slice(0, index + 1), card, ...projects.slice(index + 1)];
+	};
+
+	const makeCard = (overrides: Partial<FeedProject> & { id: string }): FeedProject => ({
+		name: '',
+		full_name: '',
+		description: '',
+		html_url: '',
+		language: null,
+		stargazers_count: 0,
+		fork: 0,
+		forks_count: 0,
+		topics: [],
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+		is_pinned: 1,
+		owner_id: 0,
+		fetched_at: new Date().toISOString(),
+		readmeSnippet: '',
+		avatar: '',
+		stargazersUrl: '',
+		forksUrl: '',
+		default_branch: '',
+		...overrides
+	});
+
+	const interject = (index: number) => {
+		if (viewedCount === 5 && !hasShownFeaturedMessage) {
+			hasShownFeaturedMessage = true;
+			insertAfter(
+				index,
+				makeCard({
+					id: FEATURED_CTA_CARD,
+					name: 'Get your project featured',
+					full_name: 'BlackShoreTech/gittok.dev',
+					description:
+						'Want your open source project in this feed? Here is how to get it in front of people.',
+					html_url: 'https://github.com/BlackShoreTech/gittok.dev',
+					avatar: 'https://avatars.githubusercontent.com/u/583231?v=4'
+				})
+			);
+			return;
+		}
+
+		if (viewedCount === 10 && !hasShownFollowMessage) {
+			hasShownFollowMessage = true;
+			insertAfter(
+				index,
+				makeCard({
+					id: FOLLOW_CARD,
+					name: 'Enjoying GitTok?',
+					full_name: '@brsc2909/gittok',
+					description:
+						"If you're getting something out of this, follow along for more projects like these.",
+					html_url: 'https://twitter.com/brsc2909',
+					avatar: 'https://avatars.githubusercontent.com/u/1?v=4'
+				})
+			);
+			return;
+		}
+
+		// A promoted placement every tenth card, never more often.
+		if ((index + 1) % 10 === 0 && featuredRepos.length) {
+			insertAfter(index, featuredRepos[Math.floor(index / 10) % featuredRepos.length]);
+		}
+	};
+
+	/* --------------------------------------------------------------------- *
+	 * Navigation
+	 * --------------------------------------------------------------------- */
+
+	const setUrlParams = (project: FeedProject) => {
+		if (!project.name || !project.full_name.includes('/')) return;
 		const url = new URL(window.location.href);
 		url.searchParams.set('project', project.name);
 		url.searchParams.set('author', project.full_name.split('/')[0]);
 		window.history.replaceState({}, '', url.toString());
-	}
-
-	// Function to load featured repositories from JSON file
-	const loadFeaturedRepos = async (): Promise<FeedProject[]> => {
-		try {
-			const response = await fetch('/data/featured_repos.json');
-			if (!response.ok) {
-				throw new Error(`Failed to fetch featured repos: ${response.status}`);
-			}
-			
-			const data = await response.json();
-			
-			// Transform the data to match FeedProject type
-			return Promise.all(data.map(async (repo: any) => {
-				// Fetch README for each featured repo
-				let readmeContent = '';
-				try {
-					readmeContent = await fetchReadme(
-						repo.full_name.split('/')[0],
-						repo.name,
-						repo.default_branch
-					);
-				} catch (error) {
-					console.error(`Error fetching README for ${repo.full_name}:`, error);
-				}
-				
-				return {
-					id: '-2',
-					name: repo.name,
-					full_name: repo.full_name,
-					description: repo.description || '',
-					html_url: repo.html_url,
-					language: repo.language,
-					stargazers_count: repo.stargazers_count,
-					fork: repo.fork,
-					created_at: repo.created_at,
-					updated_at: repo.updated_at,
-					is_pinned: repo.is_pinned,
-					owner_id: repo.owner_id,
-					fetched_at: repo.fetched_at,
-					readmeSnippet: readmeContent,
-					avatar: repo.avatar_url,
-					stargazersUrl: `${repo.html_url}/stargazers`,
-					forksUrl: `${repo.html_url}/fork`,
-					default_branch: repo.default_branch
-				};
-			}));
-		} catch (error) {
-			console.error('Error loading featured repos:', error);
-			return getDefaultFeaturedRepos();
-		}
 	};
 
-	// Function to get default featured repos when JSON loading fails
-	const getDefaultFeaturedRepos = (): FeedProject[] => {
-		return [
-			{
-				id: '-2',
-				name: 'gittok.dev',
-				full_name: 'BlackShoreTech/gittok.dev',
-				description: 'A TikTok-style interface for discovering amazing open source projects. Built with SvelteKit and Tailwind CSS.',
-				html_url: 'https://github.com/BlackShoreTech/gittok.dev',
-				language: 'Svelte',
-				stargazers_count: 1337,
-				fork: 0,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString(),
-				is_pinned: 1,
-				owner_id: 0,
-				fetched_at: new Date().toISOString(),
-				readmeSnippet: '# GitTok\n\nGitTok is an innovative way to discover open source projects. With its TikTok-inspired interface, you can effortlessly scroll through carefully curated GitHub repositories.\n\n## Features\n\n- Vertical scrolling interface\n- Real-time README previews\n- GitHub statistics integration\n- Beautiful dark mode design\n- Mobile-first responsive layout',
-				avatar: 'https://avatars.githubusercontent.com/u/583231?v=4',
-				stargazersUrl: 'https://github.com/gittok/gittok/stargazers',
-				forksUrl: 'https://github.com/gittok/gittok/fork',
-				default_branch: 'main'
-			},
-			{
-				id: '-3',
-				name: 'Sponsor GitTok',
-				full_name: 'sponsor/gittok',
-				description: 'Want to promote your open source project here? Reach thousands of developers daily!',
-				html_url: 'mailto:sponsor@gittok.dev',
-				language: null,
-				stargazers_count: 0,
-				fork: 0,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString(),
-				is_pinned: 1,
-				owner_id: 0,
-				fetched_at: new Date().toISOString(),
-				readmeSnippet: '# Promote Your Project\n\nReach thousands of developers who are actively discovering new open source projects.\n\n## Why Sponsor?\n\n- Increase project visibility\n- Reach active developers\n- Support open source\n- Boost community engagement\n\nContact us at sponsor@gittok.dev',
-				avatar: 'https://avatars.githubusercontent.com/u/583231?v=4',
-				stargazersUrl: 'mailto:sponsor@gittok.dev',
-				forksUrl: 'mailto:sponsor@gittok.dev',
-				default_branch: 'main'
-			}
-		];
-	};
-
-	// Simplified function to insert a featured repo at a specific position in the feed
-	const insertFeaturedRepo = (index: number) => {
-		// Only insert if we're at a position divisible by 10 (every 10th item)
-		if ((index + 1) % 10 === 0 && featuredRepos.length > 0) {
-			const position = Math.floor(index / 10);
-			const featuredRepo = featuredRepos[position % featuredRepos.length];
-			
-			// Insert the featured repo after the current index
-			projects = [
-				...projects.slice(0, index + 1),
-				featuredRepo,
-				...projects.slice(index + 1)
-			];
-		}
-	};
-
-	// Update the intersection observer to handle pagination and featured repos
 	const observeElement = (element: HTMLElement, index: number) => {
 		const observer = new IntersectionObserver(
-			async (entries) => {
-				entries.forEach(async (entry) => {
-					if (entry.isIntersecting) {
-						seturlparams(projects[index]);
-						console.log('isIntersecting', index);
+			(entries) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+
+					setUrlParams(projects[index]);
+					if (index > 0) showScrollHint = false;
+
+					if (!viewedIndices.has(index)) {
 						viewedIndices.add(index);
-						viewedIndices = viewedIndices; // trigger reactivity
-
-						// Show follow message after viewing 10 items
-						if (viewedIndices.size === 10 && !hasShownFollowMessage) {
-							hasShownFollowMessage = true;
-							// Insert the follow message card after the current item
-							const followMessageProject: FeedProject = {
-								id: '-1',
-								name: 'Enjoying GitTok?',
-								full_name: '@brsc2909/gittok',
-								description:
-									"If you're finding this useful, consider following me on Twitter for more cool projects!",
-								html_url: 'https://twitter.com/brsc2909',
-								language: null,
-								stargazers_count: 0,
-								fork: 0,
-								created_at: new Date().toISOString(),
-								updated_at: new Date().toISOString(),
-								is_pinned: 1,
-								owner_id: 0,
-								fetched_at: new Date().toISOString(),
-								readmeSnippet: '',
-								avatar: 'https://avatars.githubusercontent.com/u/1?v=4',
-								stargazersUrl: '',
-								forksUrl: '',
-								default_branch: ''
-							};
-							projects = [
-								...projects.slice(0, index + 1),
-								followMessageProject,
-								...projects.slice(index + 1)
-							];
-						}
-						
-						// Show "Get Featured" message after viewing 5 items
-						if (viewedIndices.size === 5 && !hasShownFeaturedMessage) {
-							hasShownFeaturedMessage = true;
-							// Insert the get featured message card after the current item
-							const getFeaturedMessageProject: FeedProject = {
-								id: '-4',
-								name: 'Get Your Project Featured',
-								full_name: 'BlackShoreTech/gittok.dev',
-								description:
-									"Want your open source project to be featured on GitTok? Here's how to get more visibility for your work!",
-								html_url: 'https://github.com/BlackShoreTech/gittok.dev',
-								language: null,
-								stargazers_count: 0,
-								fork: 0,
-								created_at: new Date().toISOString(),
-								updated_at: new Date().toISOString(),
-								is_pinned: 1,
-								owner_id: 0,
-								fetched_at: new Date().toISOString(),
-								readmeSnippet: '',
-								avatar: 'https://avatars.githubusercontent.com/u/583231?v=4',
-								stargazersUrl: 'https://github.com/BlackShoreTech/gittok.dev',
-								forksUrl: 'https://github.com/BlackShoreTech/gittok.dev/fork',
-								default_branch: 'main'
-							};
-							projects = [
-								...projects.slice(0, index + 1),
-								getFeaturedMessageProject,
-								...projects.slice(index + 1)
-							];
-						}
-
-						// Insert featured repos at intervals
-						insertFeaturedRepo(index);
-
-						// Fetch README when item comes into view
-						// Fetch current and next 3 READMEs when an item comes into view
-						if (projects[index] && !projects[index].readmeSnippet) {
-							// Fetch current README
-							const readme = await fetchReadme(
-								projects[index].full_name.split('/')[0],
-								projects[index].name,
-								projects[index].default_branch
-							);
-							projects[index].readmeSnippet = readme;
-
-							projects = projects; // trigger reactivity
-						}
-
-						// Fetch next 2 READMEs
-						for (let i = 1; i <= 2; i++) {
-							const nextIndex = index + i;
-							if (projects[nextIndex] && !projects[nextIndex].readmeSnippet) {
-								const nextReadme = await fetchReadme(
-									projects[nextIndex].full_name.split('/')[0],
-									projects[nextIndex].name,
-									projects[nextIndex].default_branch
-								);
-								projects[nextIndex].readmeSnippet = nextReadme;
-							}
-						}
-
-						// If we're getting close to the end, load more projects
-						if (index >= projects.length - 20) {
-							loadMoreProjects(index);
-						}
+						viewedCount = viewedIndices.size;
+						interject(index);
 					}
-				});
+
+					// Fetch the current README, then warm the next two so the reader
+					// never waits on the thing they are about to scroll to.
+					loadReadme(index).then(() => {
+						loadReadme(index + 1).then(() => loadReadme(index + 2));
+					});
+
+					if (index >= projects.length - 8) loadMoreProjects(index);
+				}
 			},
 			{ threshold: 0.5 }
 		);
 
 		observer.observe(element);
-		return {
-			destroy() {
-				observer.disconnect();
-			}
-		};
+		return { destroy: () => observer.disconnect() };
 	};
 
-	onMount(async () => {
-		const octokit = new Octokit();
-		// Get all the emojis available to use on GitHub.
-		const res = await octokit.rest.emojis.get();
+	const scrollBy = (direction: 1 | -1) => {
+		scroller?.scrollBy({ top: direction * scroller.clientHeight, behavior: 'smooth' });
+	};
 
-		const emojis = res.data;
+	const onKeydown = (event: KeyboardEvent) => {
+		const target = event.target as HTMLElement | null;
+		if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
 
-		marked.use(
-			markedEmoji({
-				emojis,
-				renderer: (token) =>
-					`<img alt="${token.name}" src="${token.emoji}" class="marked-emoji-img">`
-			})
-		);
-
-		// Load featured repos from JSON file
-		featuredRepos = await loadFeaturedRepos();
-		
-		// Load initial projects
-		const url = new URL(window.location.href);
-		const project = url.searchParams.get('project');
-		const author = url.searchParams.get('author');
-		const initialProjects = [];
-		if (project && author) {
-			const initialProject = await fetchProject(author, project);
-			initialProjects.push(initialProject);
+		if (event.key === 'ArrowDown' || event.key === 'j' || event.key === ' ') {
+			event.preventDefault();
+			scrollBy(1);
+		} else if (event.key === 'ArrowUp' || event.key === 'k') {
+			event.preventDefault();
+			scrollBy(-1);
 		}
+	};
 
-		const query = getRandomSearchQuery(
-			$topicsStore.size > 0 ? [...$topicsStore] : allTopics,
-			seenQueries
-		);
-		initialProjects.push(...(await searchRepositories(octokit, query.toString())));
-		
-		projects = initialProjects;
+	/* --------------------------------------------------------------------- *
+	 * Boot
+	 * --------------------------------------------------------------------- */
+
+	const loadInitial = async () => {
+		isLoading = true;
+		loadError = null;
+		try {
+			const octokit = new Octokit();
+			const initial: FeedProject[] = [];
+
+			// A shared link should open on the repository it points at.
+			const url = new URL(window.location.href);
+			const project = url.searchParams.get('project');
+			const author = url.searchParams.get('author');
+			if (project && author) {
+				try {
+					initial.push(await fetchProject(author, project));
+				} catch (error) {
+					console.error('Error loading shared project:', error);
+				}
+			}
+
+			initial.push(...(await searchRepositories(octokit, nextQuery().toString())));
+			projects = initial;
+			if (!initial.length) loadError = 'No repositories came back for these topics.';
+		} catch (error) {
+			console.error('Error loading feed:', error);
+			loadError = describeError(error);
+		} finally {
+			isLoading = false;
+		}
+	};
+
+	onMount(() => {
+		marked.use({ gfm: true });
+		loadInitial();
+
+		// Cosmetic extras are fired off separately: neither should be able to
+		// keep the feed itself from rendering.
+		loadFeaturedRepos().then((repos) => (featuredRepos = repos));
+		new Octokit().rest.emojis
+			.get()
+			.then((res) =>
+				marked.use(
+					markedEmoji({
+						emojis: res.data,
+						renderer: (token) =>
+							`<img alt="${token.name}" src="${token.emoji}" class="marked-emoji-img">`
+					})
+				)
+			)
+			.catch(() => {});
 	});
 
-	// Format numbers to human readable format (e.g., 73.5k)
-	const formatNumber = (num: number): string => {
-		if (num >= 1000) {
-			return (num / 1000).toFixed(1) + 'k';
-		}
-		return num.toString();
-	};
+	/* --------------------------------------------------------------------- *
+	 * Rendering
+	 * --------------------------------------------------------------------- */
 
-	// Create a function to safely render markdown
 	const renderMarkdown = (content: string, repo: string): string => {
-		// Force marked to return a string synchronously
-		marked.use({
-			gfm: true
-		});
 		marked.use(baseUrl(repo));
 		const rawHtml = marked.parse(content, { async: false }) as string;
 		return DOMPurify.sanitize(rawHtml, {
@@ -386,6 +358,7 @@
 				'pre',
 				'strong',
 				'em',
+				'del',
 				'blockquote',
 				'table',
 				'thead',
@@ -394,140 +367,162 @@
 				'th',
 				'td',
 				'br',
-				'hr'
+				'hr',
+				'img',
+				'sup',
+				'sub',
+				'details',
+				'summary'
 			],
-			ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
+			// Images are allowed so README badges and emoji survive; they are the
+			// texture that makes a README recognisable at a glance.
+			ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'src', 'alt', 'width', 'height', 'align']
 		});
 	};
 
-	// Add share functionality
 	const shareProject = async (project: FeedProject) => {
 		const shareUrl = `https://gittok.dev/feed?project=${project.name}&author=${project.full_name.split('/')[0]}`;
-		const shareText = `Check out ${project.name} on gittok.dev`;
 
 		if (navigator.share) {
 			try {
 				await navigator.share({
 					title: project.name,
-					text: shareText,
+					text: `Check out ${project.name} on gittok.dev`,
 					url: shareUrl
 				});
+				return;
 			} catch (err) {
-				if (err instanceof Error && err.name !== 'AbortError') {
-					console.error('Error sharing:', err);
-					// Fallback to clipboard
-					await navigator.clipboard.writeText(shareUrl);
-					alert('Link copied to clipboard!');
-				}
+				if (err instanceof Error && err.name === 'AbortError') return;
 			}
-		} else {
-			// Fallback for browsers that don't support Web Share API
-			await navigator.clipboard.writeText(shareUrl);
-			alert('Link copied to clipboard!');
 		}
+
+		await navigator.clipboard.writeText(shareUrl);
 	};
 </script>
 
-<div class="h-screen w-full snap-y snap-mandatory overflow-y-scroll svelte-16xb542" role="list" aria-label="GitHub Projects">
-	<!-- Add Settings and About Links -->
-	<div class="fixed top-4 right-4 z-50 flex gap-4">
-		<a
-			href="/about"
-			class="rounded-full bg-gray-800/50 p-2 backdrop-blur-sm transition-colors hover:bg-gray-700/50"
-			aria-label="About"
-		>
-			<Globe class="h-6 w-6 text-gray-400" />
-		</a>
-		<a
-			href="/setup"
-			class="rounded-full bg-gray-800/50 p-2 backdrop-blur-sm transition-colors hover:bg-gray-700/50"
-			aria-label="Settings"
-		>
-			<Settings class="h-6 w-6 text-gray-400" />
-		</a>
-	</div>
+<svelte:window onkeydown={onKeydown} />
 
-	{#each projects as project, index}
-		<div
-			class="project-container relative flex h-screen w-full snap-start items-center justify-center bg-gradient-to-b from-gray-900 to-black"
+<AmbientBackdrop />
+
+<div
+	bind:this={scroller}
+	class="no-scrollbar h-[100dvh] w-full snap-y snap-mandatory overflow-y-scroll"
+	role="list"
+	aria-label="GitHub repositories"
+>
+	<!-- Chrome: identity, current filter, escape hatches. Nothing else. -->
+	<header
+		class="from-ink-950/90 pointer-events-none fixed inset-x-0 top-0 z-50 flex items-center
+			justify-between gap-3 bg-gradient-to-b to-transparent px-4 pt-4 pb-8 sm:px-6"
+	>
+		<a
+			href="/"
+			class="text-ink-100 hover:text-ink-50 pointer-events-auto text-[15px] font-semibold
+				tracking-tight transition-colors"
+		>
+			GitTok
+		</a>
+
+		<div class="pointer-events-auto flex items-center gap-2">
+			{#if viewedCount > 0}
+				<span
+					class="text-ink-400 hidden font-mono text-[11px] tabular-nums sm:inline"
+					aria-live="polite"
+				>
+					{viewedCount} seen
+				</span>
+			{/if}
+
+			<a
+				href="/setup"
+				class="rounded-pill border-ink-50/10 bg-ink-850/70 text-ink-200 hover:border-ink-50/25 hover:text-ink-50 flex
+					items-center gap-1.5 border px-3 py-1.5 font-mono text-[11px]
+					backdrop-blur-md transition-colors"
+			>
+				<SlidersHorizontal class="h-3.5 w-3.5" />
+				{topicLabel}
+			</a>
+
+			<a
+				href="/about"
+				class="border-ink-50/10 bg-ink-850/70 text-ink-300 hover:border-ink-50/25 hover:text-ink-50 flex h-8 w-8
+					items-center justify-center rounded-full border backdrop-blur-md
+					transition-colors"
+				aria-label="About GitTok"
+			>
+				<Info class="h-4 w-4" />
+			</a>
+		</div>
+	</header>
+
+	{#if loadError && !projects.length}
+		<section class="flex h-[100dvh] w-full items-center justify-center px-6">
+			<div class="max-w-sm text-center">
+				<h2 class="text-ink-50 text-xl font-semibold">Nothing to scroll</h2>
+				<p class="text-ink-300 mt-2 text-sm leading-relaxed">{loadError}</p>
+				<button
+					onclick={loadInitial}
+					class="rounded-panel bg-ink-50 text-ink-950 mt-5 inline-flex items-center gap-2 px-4
+						py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
+				>
+					<RefreshCw class="h-4 w-4" />
+					Try again
+				</button>
+			</div>
+		</section>
+	{:else if !projects.length}
+		<section class="flex h-[100dvh] w-full snap-start items-center justify-center">
+			<div
+				class="mx-auto flex h-full w-full max-w-4xl flex-col px-4 pt-16 pb-4 sm:px-6 sm:pt-20 sm:pb-6"
+			>
+				<FeedCardSkeleton />
+			</div>
+		</section>
+	{/if}
+
+	{#each projects as project, index (`${project.id}-${index}`)}
+		<section
+			class="relative flex h-[100dvh] w-full snap-start items-center justify-center"
 			use:observeElement={index}
 		>
-			<!-- Main Content Container -->
-			<div class="mx-auto flex h-full w-full max-w-3xl flex-col p-6">
-				{#if project.id === '-1'}
-					<!-- Special Follow Message Card -->
-					<SpecialMessageCard {project} />
-				{:else if project.id === '-2'}
-					<!-- Promoted Repository Card -->
-					<PromotedRepoCard 
-						{project} 
-						{renderMarkdown} 
-						{formatNumber} 
-						{shareProject} 
-					/>
-				{:else if project.id === '-4'}
-					<!-- Get Featured Message Card -->
+			<div
+				class="mx-auto flex h-full w-full max-w-4xl flex-col px-4 pt-16 sm:px-6 sm:pt-20
+					{index === 0 && showScrollHint ? 'pb-11 sm:pb-14' : 'pb-4 sm:pb-6'}"
+			>
+				{#if project.id === FOLLOW_CARD || project.id === FEATURED_CTA_CARD}
 					<SpecialMessageCard {project} />
 				{:else}
-					<!-- Regular Repository Card -->
-					<RepoCard 
-						{project} 
-						{renderMarkdown} 
-						{formatNumber} 
-						{shareProject} 
+					<RepoCard
+						{project}
+						{renderMarkdown}
+						{shareProject}
+						promoted={project.id === PROMOTED_CARD}
+						retryReadme={() => retryReadme(index)}
 					/>
 				{/if}
 			</div>
-		</div>
+
+			<!-- Shown once, on the first card, then never again -->
+			{#if index === 0 && showScrollHint}
+				<button
+					onclick={() => scrollBy(1)}
+					class="text-ink-400 hover:text-ink-200 absolute inset-x-0 bottom-3.5 mx-auto flex w-fit
+						items-center gap-1.5 font-mono text-[11px] transition-colors"
+				>
+					<ChevronDown class="h-3.5 w-3.5 animate-bounce" />
+					Scroll for more
+				</button>
+			{/if}
+		</section>
 	{/each}
 
-	{#if isLoading}
-		<div
-			class="flex h-screen w-full items-center justify-center bg-gradient-to-b from-gray-900 to-black"
-		>
-			<div class="font-mono text-white">Loading more repositories...</div>
-		</div>
-	{/if}
-
-	{#if !hasMore && !isLoading}
-		<div
-			class="flex h-screen w-full items-center justify-center bg-gradient-to-b from-gray-900 to-black"
-		>
-			<div class="font-mono text-white">You've reached the end!</div>
-		</div>
+	{#if isLoading && projects.length > 0}
+		<section class="flex h-[100dvh] w-full snap-start items-center justify-center">
+			<div
+				class="mx-auto flex h-full w-full max-w-4xl flex-col px-4 pt-16 pb-4 sm:px-6 sm:pt-20 sm:pb-6"
+			>
+				<FeedCardSkeleton />
+			</div>
+		</section>
 	{/if}
 </div>
-
-<style>
-	/* Hide scrollbar for Chrome, Safari and Opera */
-	.snap-y::-webkit-scrollbar {
-		display: none;
-	}
-
-	/* Hide scrollbar for IE, Edge and Firefox */
-	.snap-y {
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
-	}
-	/* Style markdown content */
-	:global(.prose) {
-		color: rgb(229 231 235); /* gray-200 */
-	}
-
-	:global(.prose a) {
-		color: rgb(96 165 250); /* blue-400 */
-	}
-
-	:global(.prose code) {
-		color: rgb(249 168 212); /* pink-300 */
-		background: rgb(31 41 55); /* gray-800 */
-		padding: 0.2em 0.4em;
-		border-radius: 0.25em;
-	}
-
-	:global(.prose pre) {
-		background: rgb(17 24 39); /* gray-900 */
-		padding: 1em;
-		border-radius: 0.5em;
-	}
-</style>

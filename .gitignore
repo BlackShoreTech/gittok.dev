@@ -24,3 +24,7 @@ vite.config.ts.timestamp-*
 
 # SQLite
 *.db
+
+# Imported design skills/docs (from coso.ai/cm-platform)
+.agents/skills/app-design-principles/
+docs/design-principles/

@@ -14,7 +14,9 @@ export default defineConfig({
 	plugins: [
 		sveltekit(),
 		tailwindcss(),
-		mkcert(),
+		// HTTPS is on by default for local dev (PWA/Web Share API need a secure context).
+		// Set DISABLE_HTTPS=1 to serve plain HTTP, e.g. for headless-browser testing.
+		...(process.env.DISABLE_HTTPS ? [] : [mkcert()]),
 		{
 			name: 'sql.js-httpvfs',
 			configureServer(server) {
