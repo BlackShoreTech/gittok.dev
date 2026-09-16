@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { handleTokenExchange, type Env } from './index';
+import { handleRevoke, handleTokenExchange, type Env } from './index';
 
 const ENV: Env = {
 	GH_CLIENT_ID: 'test-client-id',
@@ -159,5 +159,98 @@ describe('handleTokenExchange', () => {
 
 		// Then it is refused
 		expect(response.status).toBe(405);
+	});
+});
+
+describe('handleRevoke', () => {
+	const revokeFrom = (origin: string, body: unknown): Request =>
+		new Request('https://auth.gittok.dev/revoke', {
+			method: 'POST',
+			headers: { Origin: origin, 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+
+	const stubStatus = (status: number): void => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status })));
+	};
+
+	const firstGitHubCall = () => {
+		const call = vi.mocked(fetch).mock.calls.at(0);
+		if (call === undefined) throw new Error('expected the worker to call GitHub');
+		return call;
+	};
+
+	it('deletes the grant, not just the token', async () => {
+		// Given a signed-in user disconnecting their account
+		stubStatus(204);
+
+		// When the worker revokes it
+		const response = await handleRevoke(revokeFrom(ALLOWED_ORIGIN, { access_token: 't' }), ENV);
+
+		// Then the grant endpoint is called, because deleting only the token
+		// would leave the authorization standing and skip the next consent screen
+		expect(response.status).toBe(204);
+		const [url, init] = firstGitHubCall();
+		expect(url).toBe('https://api.github.com/applications/test-client-id/grant');
+		expect(init?.method).toBe('DELETE');
+	});
+
+	it('authenticates with the client secret over basic auth', async () => {
+		// Given any revoke request
+		stubStatus(204);
+
+		// When it is handled
+		await handleRevoke(revokeFrom(ALLOWED_ORIGIN, { access_token: 't' }), ENV);
+
+		// Then GitHub is called with credentials the browser could never hold
+		const [, init] = firstGitHubCall();
+		const auth = new Headers(init?.headers).get('Authorization');
+		expect(auth).toBe(`Basic ${btoa(`${ENV.GH_CLIENT_ID}:${ENV.GH_CLIENT_SECRET}`)}`);
+	});
+
+	it('refuses an origin outside the allowlist without calling GitHub', async () => {
+		// Given a revoke attempt from an attacker-controlled page
+		stubStatus(204);
+
+		// When the worker handles it
+		const response = await handleRevoke(revokeFrom('https://evil.example', { access_token: 't' }), ENV);
+
+		// Then it is rejected and the client secret is never spent
+		expect(response.status).toBe(403);
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('treats an already-revoked grant as success', async () => {
+		// Given GitHub reporting no such grant
+		stubStatus(404);
+
+		// When the worker revokes it
+		const response = await handleRevoke(revokeFrom(ALLOWED_ORIGIN, { access_token: 't' }), ENV);
+
+		// Then it succeeds, because the caller's desired state already holds
+		expect(response.status).toBe(204);
+	});
+
+	it('rejects a body with no access token', async () => {
+		// Given a malformed request
+		stubStatus(204);
+
+		// When the worker handles it
+		const response = await handleRevoke(revokeFrom(ALLOWED_ORIGIN, {}), ENV);
+
+		// Then it is refused before reaching GitHub
+		expect(response.status).toBe(400);
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('reports an upstream failure rather than claiming success', async () => {
+		// Given GitHub failing the revoke
+		stubStatus(500);
+
+		// When the worker handles it
+		const response = await handleRevoke(revokeFrom(ALLOWED_ORIGIN, { access_token: 't' }), ENV);
+
+		// Then the caller is told, instead of believing it disconnected
+		expect(response.status).toBe(502);
 	});
 });
