@@ -104,4 +104,61 @@ describe('stars', () => {
 		// Then it throws, because only the GET uses 404 as a state answer
 		await expect(attempt).rejects.toBeInstanceOf(StarRequestError);
 	});
+
+	it('classifies 403 as forbidden so the UI can offer the GitHub fallback', async () => {
+		// Given GitHub refusing the write outright, as it does for a token that
+		// carries no starring scope
+		respondWith(403);
+
+		// When a repo is starred
+		const attempt = star(REPO);
+
+		// Then it is reported as permanent rather than something worth retrying
+		await expect(attempt).rejects.toMatchObject({ reason: 'forbidden' });
+	});
+
+	it('separates a rate-limited 403 from a permanent one', async () => {
+		// Given GitHub signalling rate limiting, which it also returns as a 403
+		// and distinguishes only by this header
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(null, { status: 403, headers: { 'x-ratelimit-remaining': '0' } })
+			)
+		);
+
+		// When a repo is starred
+		const attempt = star(REPO);
+
+		// Then it is transient, not a configuration failure
+		await expect(attempt).rejects.toMatchObject({ reason: 'rate_limited' });
+	});
+
+	it('reports a transport failure as offline rather than crashing', async () => {
+		// Given the network dropping the request, so fetch rejects
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new TypeError('Failed to fetch');
+			})
+		);
+
+		// When a repo is starred
+		const attempt = star(REPO);
+
+		// Then it surfaces as offline instead of escaping as a raw TypeError
+		await expect(attempt).rejects.toMatchObject({ reason: 'offline' });
+	});
+
+	it('classifies a 500 as a server problem', async () => {
+		// Given GitHub failing internally
+		respondWith(500);
+
+		// When a repo is starred
+		const attempt = star(REPO);
+
+		// Then it is attributed to GitHub, not to the user
+		await expect(attempt).rejects.toMatchObject({ reason: 'server' });
+	});
 });

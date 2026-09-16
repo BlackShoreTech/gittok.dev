@@ -6,6 +6,7 @@
 -->
 
 <script lang="ts">
+	import { fade } from 'svelte/transition';
 	import { Star, GitFork, Share2, ArrowUpRight, RefreshCw } from 'lucide-svelte';
 	import type { FeedProject } from '$lib/github/feed';
 	import { languageColors } from '$lib/github/feed';
@@ -14,7 +15,14 @@
 	import posthog from 'posthog-js';
 	import { get } from 'svelte/store';
 	import { session, beginSignIn } from '$lib/github/auth';
-	import { isStarred, star, unstar, NotAuthenticatedError } from '$lib/github/stars';
+	import {
+		isStarred,
+		star,
+		unstar,
+		NotAuthenticatedError,
+		StarRequestError,
+		type StarFailureReason
+	} from '$lib/github/stars';
 	import { isAuthConfigured } from '$lib/github/config';
 
 	type Props = {
@@ -64,6 +72,7 @@
 	let starred = $state<boolean | null>(null);
 	let initialStarred = $state<boolean | null>(null);
 	let starPending = $state(false);
+	let starError = $state<StarFailureReason | null>(null);
 	let resolvedFor: string | null = null;
 
 	// Keyed off the project identity (not index) so a recycled component
@@ -74,7 +83,16 @@
 		starred = null;
 		initialStarred = null;
 		starPending = false;
+		starError = null;
 	});
+
+	const STAR_ERROR_MESSAGES: Record<StarFailureReason, string> = {
+		forbidden: "Couldn't star from here",
+		rate_limited: 'Too many requests — wait a moment',
+		offline: "You're offline — try again",
+		server: 'GitHub is having trouble',
+		unknown: "Couldn't star that"
+	};
 
 	$effect(() => {
 		// A snapshot read, not `$session` — that store is re-set on every
@@ -119,6 +137,7 @@
 		}
 
 		starPending = true;
+		starError = null;
 		const previous = starred;
 
 		try {
@@ -132,16 +151,24 @@
 
 			const next = !current;
 			starred = next;
-			posthog.capture('star_repository', { repository: fullName, starred: next });
 
 			await (next ? star(fullName) : unstar(fullName));
+
+			// Captured only after the request resolves. Firing before the await
+			// counted every failed star as a success, which reported a wholly
+			// broken feature as working.
+			posthog.capture('star_repository', { repository: fullName, starred: next });
 		} catch (error) {
 			if (project.full_name === fullName) starred = previous;
+
 			if (error instanceof NotAuthenticatedError) {
 				beginSignIn(window.location.pathname + window.location.search);
-			} else {
-				console.error('Error toggling star:', error);
+				return;
 			}
+
+			const reason = error instanceof StarRequestError ? error.reason : 'unknown';
+			if (project.full_name === fullName) starError = reason;
+			posthog.capture('star_repository_failed', { repository: fullName, reason });
 		} finally {
 			starPending = false;
 		}
@@ -297,7 +324,7 @@
 		class="absolute right-3 bottom-24 flex flex-col items-center gap-3 sm:right-4 lg:-right-[4.5rem]
 			lg:bottom-28"
 	>
-		<div class="flex flex-col items-center gap-1">
+		<div class="relative flex flex-col items-center gap-1">
 			{#if authAvailable}
 				<button
 					type="button"
@@ -334,6 +361,35 @@
 			<span class="text-ink-300 font-mono text-[11px] tabular-nums">
 				{formatCount(displayedStarCount)}
 			</span>
+
+			<!-- Anchored to the star button and extending left, because the rail
+			     itself is only as wide as a 44px control. -->
+			{#if starError !== null}
+				<div
+					role="status"
+					class="border-ink-50/12 bg-ink-800/95 rounded-panel absolute top-0 right-full z-20 mr-2
+						flex w-[10.5rem] flex-col items-end gap-1 border px-2.5 py-2 text-right
+						backdrop-blur-md"
+					transition:fade={{ duration: 120 }}
+				>
+					<span class="text-ink-200 font-mono text-[11px] leading-snug">
+						{STAR_ERROR_MESSAGES[starError]}
+					</span>
+					{#if starError === 'forbidden'}
+						<a
+							href={project.stargazersUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							onclick={() =>
+								posthog.capture('star_fallback_opened', { repository: project.full_name })}
+							class="text-spark hover:text-spark/80 font-mono text-[11px] underline
+								underline-offset-2 transition-colors"
+						>
+							Star on GitHub
+						</a>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<div class="flex flex-col items-center gap-1">
