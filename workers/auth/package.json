@@ -1,0 +1,21 @@
+{
+	"name": "gittok-auth-worker",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+		"check": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"zod": "^4"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4",
+		"typescript": "^5.9.3",
+		"vitest": "^5",
+		"wrangler": "^4.132.0"
+	}
+}

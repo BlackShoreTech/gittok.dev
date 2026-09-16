@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gittok-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-16",
+  // Free plan: 100k requests/day. This fires once per sign-in.
+  "observability": {
+    "enabled": true
+  },
+  // Public, non-secret configuration. GH_CLIENT_ID is safe to publish — it is
+  // visible in the authorize URL anyway. GH_CLIENT_SECRET is NOT here; it is
+  // uploaded separately with `wrangler secret put GH_CLIENT_SECRET`.
+  "vars": {
+    "GH_CLIENT_ID": "Iv23lii7W8lWPIJBT3zi",
+    "GH_REDIRECT_URI": "https://gittok.dev/auth/callback",
+    "ALLOWED_ORIGINS": "https://gittok.dev,http://localhost:5174"
+  }
+}

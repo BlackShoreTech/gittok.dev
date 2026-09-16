@@ -1,0 +1,57 @@
+name: Deploy auth worker
+
+# The static site still deploys to GitHub Pages via deploy.yml. This workflow
+# owns only the OAuth token-exchange Worker, so a site change never redeploys
+# auth and vice versa.
+on:
+  push:
+    branches: 'main'
+    paths:
+      - 'workers/auth/**'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-auth-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: workers/auth
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run check
+
+      - name: Test
+        run: bun run test
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/auth
+          # Pushes GH_CLIENT_SECRET to the Worker on every deploy, so GitHub
+          # Secrets stays the single source of truth for it.
+          secrets: |
+            GH_CLIENT_SECRET
+        env:
+          GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}

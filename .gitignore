@@ -18,6 +18,10 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Wrangler local secrets (holds GH_CLIENT_SECRET)
+.dev.vars
+.dev.vars.*
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
