@@ -21,7 +21,7 @@ const EXPIRY_SKEW_MS = 60_000;
 
 export type Session = {
 	readonly accessToken: string;
-	/** Epoch ms. GitHub App user tokens live 8 hours. */
+	/** Epoch ms. Defaulted to 8 hours when GitHub sends no `expires_in`. */
 	readonly expiresAt: number;
 };
 
@@ -157,7 +157,12 @@ export const beginSignIn = async (returnTo: string): Promise<void> => {
 	url.searchParams.set('state', state);
 	url.searchParams.set('code_challenge', await challengeFor(verifier));
 	url.searchParams.set('code_challenge_method', 'S256');
-	// No `scope`: a GitHub App's permissions come from its settings, not the URL.
+	// `public_repo` is the only scope GitHub accepts for starring a public repo.
+	// This is why the app is not a GitHub App: a GitHub App's user token reaches
+	// only repositories the app is installed on, so starring anything from the
+	// feed came back 403 "Resource not accessible by integration". The cost is a
+	// blunter consent screen, which the narrower `Starring` permission bought.
+	url.searchParams.set('scope', 'public_repo');
 
 	window.location.assign(url.toString());
 };
@@ -212,6 +217,10 @@ export const completeSignIn = async (code: string, state: string): Promise<void>
 		throw new SignInError('exchange_failed');
 	}
 
+	// An OAuth App only sends `expires_in` when the owner opts into expiring
+	// tokens, so the fallback is the normal path, not an edge case. Capping an
+	// otherwise non-expiring token at 8 hours keeps it from sitting in
+	// localStorage indefinitely; re-authorising is a silent redirect.
 	const lifetimeSeconds =
 		'expires_in' in payload && typeof payload.expires_in === 'number' ? payload.expires_in : 28_800;
 

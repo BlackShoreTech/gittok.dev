@@ -98,6 +98,40 @@ describe('session lifetime', () => {
 	});
 });
 
+describe('beginSignIn', () => {
+	const authorizeUrl = async (): Promise<URL> => {
+		const assign = vi.fn();
+		vi.stubGlobal('location', { origin: 'https://gittok.dev', assign });
+
+		const { beginSignIn } = await loadAuth();
+		await beginSignIn('/feed');
+
+		return new URL(String(assign.mock.calls[0]?.[0]));
+	};
+
+	it('requests public_repo, the only scope GitHub accepts for starring', async () => {
+		// Given a visitor starting sign-in
+		// When they are sent to GitHub
+		const url = await authorizeUrl();
+
+		// Then the token will come back able to star: without this scope every
+		// write is rejected, which is what broke starring under the GitHub App
+		expect(url.searchParams.get('scope')).toBe('public_repo');
+	});
+
+	it('sends the callback back to this origin under S256', async () => {
+		// Given a visitor starting sign-in
+		// When they are sent to GitHub
+		const url = await authorizeUrl();
+
+		// Then the flow is PKCE-protected and returns to the origin that began it
+		expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+		expect(url.searchParams.get('code_challenge')).toBeTruthy();
+		expect(url.searchParams.get('redirect_uri')).toBe('https://gittok.dev/auth/callback');
+		expect(url.searchParams.get('state')).toBe(sessionStorage.getItem(STATE_KEY));
+	});
+});
+
 describe('completeSignIn', () => {
 	it('refuses a callback whose state does not match this tab', async () => {
 		// Given a callback carrying someone else's state

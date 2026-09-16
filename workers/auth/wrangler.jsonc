@@ -11,7 +11,7 @@
 	// visible in the authorize URL anyway. GH_CLIENT_SECRET is NOT here; it is
 	// uploaded separately with `wrangler secret put GH_CLIENT_SECRET`.
 	"vars": {
-		"GH_CLIENT_ID": "Iv23lii7W8lWPIJBT3zi",
+		"GH_CLIENT_ID": "Ov23liuH1nFFy60YDhXu",
 		"ALLOWED_ORIGINS": "https://gittok.dev,http://localhost:5174"
 	}
 }

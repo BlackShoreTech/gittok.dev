@@ -40,37 +40,39 @@ Copy the token — it is shown **once**.
 
 ---
 
-## 2. GitHub App
+## 2. OAuth App
 
-Create at **Settings → Developer settings → GitHub Apps → New GitHub App**.
-A GitHub App, not an OAuth App: it can request `Starring` alone, whereas an OAuth
-App would have to ask for `public_repo`, which reads on the consent screen as
-write access to every public repo the user owns.
+Create at **Settings → Developer settings → OAuth Apps → New OAuth App**.
 
-| Field                                                  | Value                                 |
-| ------------------------------------------------------ | ------------------------------------- |
-| GitHub App name                                        | `GitTok`                              |
-| Homepage URL                                           | `https://gittok.dev`                  |
-| Callback URL                                           | `https://gittok.dev/auth/callback`    |
-| Callback URL (2nd)                                     | `http://localhost:5174/auth/callback` |
-| Expire user authorization tokens                       | **Enabled** (8-hour tokens)           |
-| Request user authorization (OAuth) during installation | Enabled                               |
-| Webhook → Active                                       | **Un**checked                         |
+| Field                      | Value                              |
+| -------------------------- | ---------------------------------- |
+| Application name           | `GitTok`                           |
+| Homepage URL               | `https://gittok.dev`               |
+| Authorization callback URL | `https://gittok.dev/auth/callback` |
 
-**Permissions → Account permissions → Starring: Read and write.** Nothing else.
-Leave every repository permission at "No access"; `Metadata: read` is implied and
-does not add a repository picker.
-
-**Where can this GitHub App be installed? → Any account.**
+GitHub allows one callback URL per OAuth App, so local development needs a second
+App of its own pointed at `http://localhost:5174/auth/callback`.
 
 After creating it:
 
-- copy the **Client ID** (`Iv1....`) — public, goes in `wrangler.jsonc`
+- copy the **Client ID** (`Ov23....`) — public, goes in `wrangler.jsonc` **and**
+  `src/lib/github/config.ts`. The two must match or the exchange fails.
 - **Generate a new client secret** and copy it — shown once
 
-> Users authorize this app; they do **not** install it. GitHub's docs: _"An app
-> does not need to be installed in order for a user to authorize the app."_ So the
-> consent screen shows the `Starring` permission and no repository picker.
+### Why not a GitHub App
+
+A GitHub App can request the narrow `Starring` permission instead of the blunt
+`public_repo` scope, and GitTok was built that way first. It cannot work.
+Starring also requires the `Metadata` **repository** permission, and a GitHub
+App's user access token reaches only repositories the app is installed on —
+GitHub's own wording is _"a user access token can only access resources that both
+the user and app can access."_ GitTok is authorized, never installed, so
+`PUT /user/starred/{owner}/{repo}` against a repo from the feed always returned
+`403 Resource not accessible by integration`.
+
+`public_repo` is the only thing GitHub accepts here: _"Also required for starring
+public repositories."_ The consent screen is blunter as a result. That is the
+price of the feature, not an oversight — see the comment in `auth.ts`.
 
 ---
 
@@ -81,18 +83,18 @@ After creating it:
 Replace the placeholder — this value is public, commit it:
 
 ```jsonc
-"GH_CLIENT_ID": "Iv1.your_real_client_id"
+"GH_CLIENT_ID": "Ov23your_real_client_id"
 ```
 
 ### In the GitHub repo
 
 **Settings → Secrets and variables → Actions → New repository secret**, three times:
 
-| Secret name             | Value                                    |
-| ----------------------- | ---------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | the API token from step 1                |
-| `CLOUDFLARE_ACCOUNT_ID` | the Account ID from step 1               |
-| `GH_CLIENT_SECRET`      | the GitHub App client secret from step 2 |
+| Secret name             | Value                                   |
+| ----------------------- | --------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | the API token from step 1               |
+| `CLOUDFLARE_ACCOUNT_ID` | the Account ID from step 1              |
+| `GH_CLIENT_SECRET`      | the OAuth App client secret from step 2 |
 
 `.github/workflows/deploy-worker.yml` pushes `GH_CLIENT_SECRET` to the Worker on
 every deploy, so GitHub Secrets stays the single source of truth. It never
@@ -122,6 +124,20 @@ curl -i -X POST https://gittok-auth.<subdomain>.workers.dev \
   -H "Origin: https://evil.example" -H "Content-Type: application/json" \
   -d '{"code":"x","code_verifier":"'"$(printf 'v%.0s' {1..43})"'"}'
 # expect: HTTP/2 403  {"error":"origin_not_allowed"}
+```
+
+Then confirm `GH_CLIENT_ID` and `GH_CLIENT_SECRET` are from the **same** App. The
+ID is committed and the secret is uploaded separately, so changing one without
+the other is the easy mistake — and it is invisible until a user tries to sign
+in. Spending a deliberately invalid code makes GitHub answer with which of the
+two it disliked:
+
+```bash
+curl -X POST https://gittok-auth.<subdomain>.workers.dev \
+  -H "Origin: https://gittok.dev" -H "Content-Type: application/json" \
+  -d '{"code":"fake-code","code_verifier":"'"$(printf 'v%.0s' {1..64})"'"}'
+# {"error":"bad_verification_code"}       → the pair matches; only the fake code was rejected
+# {"error":"incorrect_client_credentials"} → mismatched pair, sign-in is broken
 ```
 
 ---
@@ -154,13 +170,15 @@ GH_CLIENT_SECRET=your_dev_client_secret
 | `src/lib/github/stars.ts`               | `isStarred` / `star` / `unstar` against `api.github.com`.        |
 
 Flow: sign-in generates a `code_verifier` + `state` into `sessionStorage` and
-redirects to GitHub with `code_challenge_method=S256` and **no `scope`** (a GitHub
-App's permissions come from its settings). The callback verifies `state`, POSTs
-`{code, code_verifier}` to the Worker, and stores the 8-hour token.
+redirects to GitHub with `code_challenge_method=S256` and `scope=public_repo`. The
+callback verifies `state`, POSTs `{code, code_verifier}` to the Worker, and stores
+the token.
 
-The Worker drops GitHub's `refresh_token` (6-month lifetime), so nothing
-long-lived reaches the browser. When a star call returns `401`, `stars.ts` clears
-the session and the UI restarts sign-in — GitHub redirects straight back without a
+The App does not opt into expiring tokens, so GitHub returns no `expires_in` and
+the token would otherwise be permanent. `auth.ts` caps it at 8 hours locally, so
+nothing long-lived sits in `localStorage`; any `refresh_token` GitHub does send is
+dropped by the Worker. When a star call returns `401`, `stars.ts` clears the
+session and the UI restarts sign-in — GitHub redirects straight back without a
 second consent prompt.
 
 Starred state is resolved lazily, only for the card currently in view. Probing

@@ -4,8 +4,8 @@
 // never here; it lives only in the Cloudflare Worker. See
 // docs/project/cloudflare-setup.md.
 
-/** GitHub App client ID. From the app's settings page. */
-export const GITHUB_CLIENT_ID = 'Iv23lii7W8lWPIJBT3zi';
+/** OAuth App client ID. Must match `GH_CLIENT_ID` in the Worker's wrangler.jsonc. */
+export const GITHUB_CLIENT_ID = 'Ov23liuH1nFFy60YDhXu';
 
 /** Deployed token-exchange Worker. */
 export const AUTH_WORKER_URL = 'https://gittok-auth.brendan-a6b.workers.dev';
