@@ -53,7 +53,42 @@ export const languageColors = {
 	React: '#61dafb'
 } as const;
 
-export const stars = ['stars:>1000', 'stars:500..1000', 'stars:100..500'] as const;
+/**
+ * Star bands to sample from, paired with their draw weight. Bounded at the top
+ * on purpose: GitHub ranks by popularity, so an open-ended `stars:>1000` filled
+ * every draw with the same 100k-star monuments.
+ */
+export const starBands = [
+	['stars:50..200', 2],
+	['stars:200..1000', 3],
+	['stars:1000..5000', 3],
+	['stars:5000..20000', 2],
+	['stars:20000..100000', 1]
+] as const;
+
+/**
+ * Orderings to rotate through. Best match (the empty entry) is GitHub's default
+ * and is stable, so on its own it returns identical results for identical
+ * queries — which is what made refreshes feel the same.
+ */
+export const orderings = [
+	{},
+	{ sort: 'stars', order: 'desc' },
+	{ sort: 'stars', order: 'asc' },
+	{ sort: 'forks', order: 'desc' },
+	{ sort: 'forks', order: 'asc' },
+	{ sort: 'updated', order: 'desc' },
+	{ sort: 'help-wanted-issues', order: 'desc' }
+] as const satisfies readonly { sort?: string; order?: string }[];
+
+/** GitHub refuses to serve past the first 1000 results of any search. */
+const MAX_SEARCH_RESULTS = 1000;
+
+const PER_PAGE = 25;
+
+/** How deep to page before a query's real size is known. Overshooting costs one
+ * request, which `fetchFeedPage` recovers from. */
+const UNKNOWN_QUERY_PAGE_CEILING = 4;
 
 export const languages = [
 	'language:typescript',
@@ -154,14 +189,30 @@ interface GitHubSearchResponse {
 	}>;
 }
 
-export async function searchRepositories(octokit: Octokit, query: string): Promise<FeedProject[]> {
+export interface SearchResult {
+	projects: FeedProject[];
+	/** Capped by GitHub at 1000 for paging purposes, however large the real count is. */
+	totalCount: number;
+}
+
+export async function searchRepositories(octokit: Octokit, query: string): Promise<SearchResult> {
 	const url = new URL('https://api.github.com/search/repositories');
 	url.search = query;
 
 	const res = await fetch(url);
 	const data = (await res.json()) as GitHubSearchResponse;
 
-	return data.items.map((item) => ({
+	// A throttled search answers with a message and no `items`; without this the
+	// feed reports "cannot read properties of undefined" instead of the rate limit.
+	if (!Array.isArray(data.items)) {
+		throw new Error(
+			res.status === 403 || res.status === 429
+				? 'GitHub search rate limit reached'
+				: `GitHub search failed with ${res.status}`
+		);
+	}
+
+	const projects = data.items.map((item) => ({
 		id: item.id.toString(),
 		name: item.name,
 		full_name: item.full_name,
@@ -183,31 +234,120 @@ export async function searchRepositories(octokit: Octokit, query: string): Promi
 		forksUrl: item.html_url + '/fork',
 		default_branch: item.default_branch
 	}));
+
+	return { projects, totalCount: data.total_count ?? projects.length };
+}
+
+export interface QueryMemory {
+	current_page: number;
+	total_projects: number;
+}
+
+export type Random = () => number;
+
+const pick = <T>(values: readonly T[], random: Random): T =>
+	values[Math.floor(random() * values.length)];
+
+const pickWeighted = <T>(entries: readonly (readonly [T, number])[], random: Random): T => {
+	const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+	let roll = random() * total;
+
+	for (const [value, weight] of entries) {
+		roll -= weight;
+		if (roll < 0) return value;
+	}
+
+	return entries[entries.length - 1][0];
+};
+
+const pickPage = (memory: QueryMemory | undefined, random: Random): number => {
+	const reachable = memory
+		? Math.min(Math.ceil(memory.total_projects / PER_PAGE), MAX_SEARCH_RESULTS / PER_PAGE)
+		: UNKNOWN_QUERY_PAGE_CEILING;
+	const ceiling = Math.max(1, reachable);
+	const page = 1 + Math.floor(random() * ceiling);
+
+	// Step off a page already served this session rather than re-reading it.
+	return ceiling > 1 && page === memory?.current_page ? (page % ceiling) + 1 : page;
+};
+
+export function shuffle<T>(values: T[], random: Random = Math.random): T[] {
+	const result = [...values];
+
+	for (let i = result.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[result[i], result[j]] = [result[j], result[i]];
+	}
+
+	return result;
 }
 
 export function getRandomSearchQuery(
 	topics: string[],
-	seenQueries: Record<string, { current_page: number; total_projects: number }>,
-	attempt: number = 0
+	seenQueries: Record<string, QueryMemory>,
+	random: Random = Math.random
 ): URLSearchParams {
+	const topic = pick(topics, random);
+	const band = pickWeighted(starBands, random);
+	const ordering = pick(orderings, random);
+
+	const q = `${band} topic:${topic}`;
 	const searchParams = new URLSearchParams();
 
-	const randomTopic = `topic:${topics[Math.floor(Math.random() * topics.length)]}`;
-	const randomStars = stars[Math.floor(Math.random() * stars.length)];
-
-	const q = `${randomStars} ${randomTopic}`;
-
 	searchParams.set('q', q);
-	searchParams.set('page', '1');
-	searchParams.set('per_page', '25');
+	searchParams.set('per_page', String(PER_PAGE));
+	searchParams.set('page', String(pickPage(seenQueries[q], random)));
 
-	if (seenQueries[q] && attempt < 10000) {
-		if (seenQueries[q].current_page < seenQueries[q].total_projects / 25) {
-			searchParams.set('page', (seenQueries[q].current_page + 1).toString());
-		} else {
-			return getRandomSearchQuery(topics, seenQueries, attempt + 1);
-		}
+	if ('sort' in ordering) {
+		searchParams.set('sort', ordering.sort);
+		searchParams.set('order', ordering.order);
 	}
 
 	return searchParams;
+}
+
+/**
+ * How many times to re-draw before giving up. Pairing a rare topic with a high
+ * star band genuinely matches nothing — `topic:astrophysics stars:20000..100000`
+ * is empty — and a reader should get a different draw, not an empty feed.
+ */
+const MAX_DRAWS = 3;
+
+/**
+ * Draws randomised searches until one returns something, recording how big each
+ * result set turned out to be so later draws against the same query can page
+ * deeper instead of re-reading page 1.
+ */
+export async function fetchFeedPage(
+	octokit: Octokit,
+	topics: string[],
+	seenQueries: Record<string, QueryMemory>,
+	random: Random = Math.random
+): Promise<FeedProject[]> {
+	for (let attempt = 0; attempt < MAX_DRAWS; attempt++) {
+		const searchParams = getRandomSearchQuery(topics, seenQueries, random);
+		const q = searchParams.get('q') ?? '';
+
+		const run = async (): Promise<FeedProject[]> => {
+			const result = await searchRepositories(octokit, searchParams.toString());
+			seenQueries[q] = {
+				current_page: Number(searchParams.get('page')),
+				total_projects: result.totalCount
+			};
+			return result.projects;
+		};
+
+		let projects = await run();
+
+		// Page 1 holds whatever exists, so it separates "the draw overshot" from
+		// "this combination matches nothing".
+		if (!projects.length && searchParams.get('page') !== '1') {
+			searchParams.set('page', '1');
+			projects = await run();
+		}
+
+		if (projects.length) return projects;
+	}
+
+	return [];
 }

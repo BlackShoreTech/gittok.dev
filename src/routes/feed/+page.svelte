@@ -14,13 +14,9 @@
 	import { Octokit } from '@octokit/rest';
 	import { markedEmoji } from 'marked-emoji';
 	import { Info, SlidersHorizontal, ChevronDown, RefreshCw, LogIn, LogOut } from 'lucide-svelte';
-	import type { FeedProject } from '$lib/github/feed';
-	import {
-		fetchProject,
-		fetchReadme,
-		getRandomSearchQuery,
-		searchRepositories
-	} from '$lib/github/feed';
+	import type { FeedProject, QueryMemory } from '$lib/github/feed';
+	import { fetchFeedPage, fetchProject, fetchReadme, shuffle } from '$lib/github/feed';
+	import { dropSeen, loadSeenRepoIds, rememberRepoIds } from '$lib/github/seen';
 	import { session, beginSignIn, disconnect, restoreSession } from '$lib/github/auth';
 	import { isAuthConfigured } from '$lib/github/config';
 	import { resolveReadmeUrls, type RepoRef } from '$lib/github/readme-urls';
@@ -51,7 +47,11 @@
 	let hasShownFollowMessage = false;
 	let hasShownFeaturedMessage = false;
 	let featuredRepos: FeedProject[] = [];
-	let seenQueries: Record<string, { current_page: number; total_projects: number }> = {};
+	let seenQueries: Record<string, QueryMemory> = {};
+
+	// Survives a reload, which is the whole point: a refresh should open on
+	// something the reader has not already been shown.
+	let seenRepoIds = new Set<string>();
 
 	const topicLabel = $derived(
 		$topicsStore.size > 0
@@ -63,25 +63,28 @@
 	 * Loading
 	 * --------------------------------------------------------------------- */
 
-	const nextQuery = () =>
-		getRandomSearchQuery($topicsStore.size > 0 ? [...$topicsStore] : allTopics, seenQueries);
+	const nextBatch = async (octokit: Octokit) => {
+		const pool = $topicsStore.size > 0 ? [...$topicsStore] : allTopics;
+		const batch = dropSeen(await fetchFeedPage(octokit, pool, seenQueries), seenRepoIds);
+
+		rememberRepoIds(
+			seenRepoIds,
+			batch.map((project) => project.id)
+		);
+		return batch;
+	};
 
 	const loadMoreProjects = async (index: number) => {
 		if (isLoading) return;
 
 		isLoading = true;
 		try {
-			const octokit = new Octokit();
-			const newProjects = await searchRepositories(octokit, nextQuery().toString());
+			const newProjects = await nextBatch(new Octokit());
 			if (!newProjects.length) return;
 
 			// Shuffle incoming repos into what's left ahead of the reader, so the
 			// feed never settles into visible topic-shaped blocks.
-			const combined = [...projects.slice(index + 1), ...newProjects];
-			for (let i = combined.length - 1; i > 0; i--) {
-				const j = Math.floor(Math.random() * (i + 1));
-				[combined[i], combined[j]] = [combined[j], combined[i]];
-			}
+			const combined = shuffle([...projects.slice(index + 1), ...newProjects]);
 
 			projects = [...projects.slice(0, index + 1), ...combined];
 			loadError = null;
@@ -231,6 +234,10 @@
 	 * Navigation
 	 * --------------------------------------------------------------------- */
 
+	const isReload = () =>
+		(performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)
+			?.type === 'reload';
+
 	const setUrlParams = (project: FeedProject) => {
 		if (!project.name || !project.full_name.includes('/')) return;
 		const url = new URL(window.location.href);
@@ -298,11 +305,15 @@
 			const octokit = new Octokit();
 			const initial: FeedProject[] = [];
 
-			// A shared link should open on the repository it points at.
+			// A shared link should open on the repository it points at. A reload
+			// should not: the feed writes the current card into the URL as the
+			// reader scrolls, so on refresh those parameters describe where they
+			// left off, and honouring them pinned that same card to the top of
+			// every refresh.
 			const url = new URL(window.location.href);
 			const project = url.searchParams.get('project');
 			const author = url.searchParams.get('author');
-			if (project && author) {
+			if (project && author && !isReload()) {
 				try {
 					initial.push(await fetchProject(author, project));
 				} catch (error) {
@@ -310,7 +321,9 @@
 				}
 			}
 
-			initial.push(...(await searchRepositories(octokit, nextQuery().toString())));
+			// Shuffled so the opening card is not simply GitHub's top hit for
+			// whichever query the draw landed on.
+			initial.push(...shuffle(await nextBatch(octokit)));
 			projects = initial;
 			if (!initial.length) loadError = 'No repositories came back for these topics.';
 		} catch (error) {
@@ -324,11 +337,13 @@
 	onMount(() => {
 		marked.use({ gfm: true });
 		restoreSession();
+		seenRepoIds = loadSeenRepoIds();
 		loadInitial();
 
 		// Cosmetic extras are fired off separately: neither should be able to
-		// keep the feed itself from rendering.
-		loadFeaturedRepos().then((repos) => (featuredRepos = repos));
+		// keep the feed itself from rendering. Promoted cards are shuffled so the
+		// same few do not take every placement on every visit.
+		loadFeaturedRepos().then((repos) => (featuredRepos = shuffle(repos)));
 		new Octokit().rest.emojis
 			.get()
 			.then((res) =>
