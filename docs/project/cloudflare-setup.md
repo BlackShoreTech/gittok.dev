@@ -4,7 +4,10 @@ One-time manual setup for the GitHub sign-in flow. Everything here is free.
 
 The Worker in `workers/auth/` exists for one reason: a static site cannot hold
 `GH_CLIENT_SECRET`, and GitHub's token endpoint requires it. The Worker adds the
-secret to the exchange and returns a short-lived token. It stores nothing.
+secret to the exchange and returns a short-lived token.
+
+It keeps no token of its own. The one thing it persists is a row per signed-in
+account in D1 — see [Sign-in database](#create-the-sign-in-database) below.
 
 ---
 
@@ -37,6 +40,44 @@ Scope it down before saving:
 | TTL               | leave default                                         |
 
 Copy the token — it is shown **once**.
+
+### Create the sign-in database
+
+Already created, and committed to `wrangler.jsonc` as the `DB` binding:
+
+```bash
+bunx wrangler d1 create gittok                    # -> database_id
+bunx wrangler d1 migrations apply gittok --remote  # creates the users table
+```
+
+`database_id` is an account-scoped identifier, not a credential — inert without
+the API token — so it is committed alongside `GH_CLIENT_ID`.
+
+Free plan: 5 GB, 5M rows read/day, 100k rows written/day. One sign-in writes one
+row, so the write ceiling is ~100k sign-ins/day.
+
+Reading it back:
+
+```bash
+bunx wrangler d1 execute gittok --remote \
+  --command "SELECT COUNT(*) AS users FROM users;"
+
+bunx wrangler d1 execute gittok --remote \
+  --command "SELECT date(first_seen_at) AS day, COUNT(*) AS signups
+             FROM users GROUP BY day ORDER BY day DESC LIMIT 30;"
+```
+
+`users.email` is GitHub's **public profile** email and is therefore `NULL` for
+most accounts. The verified primary address needs `user:email` added to the
+scope in `src/lib/github/auth.ts` and a `GET /user/emails` call — which widens
+the consent screen and makes every already-authorized user re-consent.
+
+> **Operational trap.** `recordSignIn` swallows its own failures by design, so an
+> unapplied migration loses signups **silently**: sign-in keeps working and the
+> only symptom is a `sign_in_record_failed` line in Workers Logs. Apply every
+> future migration with `--remote` at deploy time. CI deliberately does not do it
+> for you — auto-migrating on each push is how one bad migration takes the table
+> with it.
 
 ---
 
