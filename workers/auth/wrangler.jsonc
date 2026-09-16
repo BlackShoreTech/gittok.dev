@@ -13,5 +13,15 @@
 	"vars": {
 		"GH_CLIENT_ID": "Ov23liuH1nFFy60YDhXu",
 		"ALLOWED_ORIGINS": "https://gittok.dev,http://localhost:5174"
-	}
+	},
+	// The sign-in registry. `database_id` is an account-scoped identifier, not a
+	// credential — it is useless without the API token, so it is committed.
+	// Free plan: 100k rows written/day, and a sign-in writes one row.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "gittok",
+			"database_id": "5b3751a8-50cb-48a3-b2b4-b1cbb95257b2"
+		}
+	]
 }
