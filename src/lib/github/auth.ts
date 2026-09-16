@@ -100,10 +100,41 @@ export const getAccessToken = (): string | null => {
 	return current?.accessToken ?? null;
 };
 
+/** Forgets the token locally. The GitHub authorization itself is left alone. */
 export const signOut = (): void => {
 	if (!browser) return;
 	localStorage.removeItem(TOKEN_KEY);
 	sessionStore.set(null);
+};
+
+/**
+ * Disconnects the account for real: revokes the authorization on GitHub, then
+ * clears local state.
+ *
+ * `signOut` alone leaves the grant standing, so the next sign-in completes
+ * silently with no consent screen and the app quietly regains access. Revoking
+ * the grant is also what makes a user pick up changed App permissions, since
+ * GitHub only re-prompts for an app that is not already authorized.
+ */
+export const disconnect = async (): Promise<void> => {
+	if (!browser) return;
+
+	const token = readStoredSession()?.accessToken ?? null;
+
+	if (token !== null && isAuthConfigured()) {
+		try {
+			await fetch(`${AUTH_WORKER_URL}/revoke`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ access_token: token })
+			});
+		} catch {
+			// Best effort: a failed revoke must not strand the user in a session
+			// they asked to end, so the local clear below happens regardless.
+		}
+	}
+
+	signOut();
 };
 
 /**

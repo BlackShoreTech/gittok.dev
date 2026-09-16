@@ -22,7 +22,7 @@
 		getRandomSearchQuery,
 		searchRepositories
 	} from '$lib/github/feed';
-	import { session, beginSignIn, signOut, restoreSession } from '$lib/github/auth';
+	import { session, beginSignIn, disconnect, restoreSession } from '$lib/github/auth';
 	import { isAuthConfigured } from '$lib/github/config';
 
 	import Seo from '$lib/components/Seo.svelte';
@@ -463,11 +463,11 @@
 			{#if authAvailable}
 				{#if $session}
 					<button
-						onclick={signOut}
+						onclick={disconnect}
 						class="border-ink-50/10 bg-ink-850/70 text-ink-300 hover:border-ink-50/25 hover:text-ink-50 relative flex
 							h-8 w-8 items-center justify-center rounded-full border backdrop-blur-md
 							transition-colors"
-						aria-label="Signed in with GitHub. Sign out"
+						aria-label="Signed in with GitHub. Disconnect account"
 					>
 						<span
 							class="bg-signal absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full"
