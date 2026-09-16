@@ -57,17 +57,30 @@ export async function processStargazerRepositories(octokit: Octokit, stargazer: 
   }
 }
 
-export async function printRecentStatistics() {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  
+// Reports against the same window the fetch used. It previously hardcoded 24
+// hours while the fetch looked back further, so a run that ingested stars still
+// logged "New stargazers: 0" — the misleading signal that let a total star
+// collection failure sit unnoticed.
+export async function printRecentStatistics(lookbackDays: number) {
+  const windowStart = new Date(
+    Date.now() - lookbackDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+
   const recentStargazers = await db.select({ count: sql<number>`count(*)` })
     .from(stargazers)
-    .where(sql`starred_at >= ${oneDayAgo}`)
+    .where(sql`starred_at >= ${windowStart}`)
     .get();
 
   const recentStargazerIds = await db.select({ id: stargazers.id })
     .from(stargazers)
-    .where(sql`starred_at >= ${oneDayAgo}`);
+    .where(sql`starred_at >= ${windowStart}`);
+
+  const stargazerCount = recentStargazers?.count ?? 0;
+
+  if (stargazerCount === 0) {
+    console.log(`\nNo stargazers in the last ${lookbackDays} days.\n`);
+    return;
+  }
 
   const recentRepos = await db.select({ count: sql<number>`count(*)` })
     .from(repositories)
@@ -79,11 +92,13 @@ export async function printRecentStatistics() {
     .where(sql`owner_id IN ${recentStargazerIds.map(s => s.id)} AND is_pinned = 1`)
     .get();
 
+  const repoCount = recentRepos?.count ?? 0;
+
   console.log(`
-Statistics for the last 24 hours:
-- New stargazers: ${recentStargazers?.count ?? 0}
-- Their repositories: ${recentRepos?.count ?? 0}
+Statistics for the last ${lookbackDays} days:
+- New stargazers: ${stargazerCount}
+- Their repositories: ${repoCount}
 - Their pinned repositories: ${recentPinnedRepos?.count ?? 0}
-- Average repositories per new stargazer: ${((recentRepos?.count ?? 0) / (recentStargazers?.count ?? 1)).toFixed(2)}
+- Average repositories per new stargazer: ${(repoCount / stargazerCount).toFixed(2)}
   `);
 } 
