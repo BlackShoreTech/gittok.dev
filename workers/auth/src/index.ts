@@ -2,9 +2,13 @@
 //          and revoke the authorization when the user disconnects.
 // Context: gittok.dev is a static SPA, so it cannot hold GH_CLIENT_SECRET. This
 // Worker is the only server-side component: it adds the secret to the exchange
-// and returns a short-lived token. It stores nothing and has no database.
+// and returns a short-lived token. It holds no token itself — the only thing it
+// persists is a row per signed-in account, in D1 (see `users.ts`), because a
+// stateless exchange left no record that anyone had ever signed up.
 
 import { z } from 'zod';
+
+import { recordSignIn, type SignInRegistry } from './users';
 
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const GITHUB_API = 'https://api.github.com';
@@ -32,12 +36,22 @@ const GitHubTokenResponse = z.union([
 	})
 ]);
 
-export type Env = {
+// `DB` arrives via SignInRegistry, which types only the three D1 methods the
+// Worker calls. The runtime binding is a full D1Database and satisfies it.
+export type Env = SignInRegistry & {
 	readonly GH_CLIENT_ID: string;
 	readonly GH_CLIENT_SECRET: string;
 	/** Comma-separated exact origins permitted to spend the client secret. */
 	readonly ALLOWED_ORIGINS: string;
 };
+
+/**
+ * The slice of `ExecutionContext` the exchange actually uses.
+ *
+ * Narrowed so a test can hand over a plain object instead of casting a stub to
+ * the full runtime interface.
+ */
+type Deferrable = Pick<ExecutionContext, 'waitUntil'>;
 
 /** Must match the SPA route that receives GitHub's redirect. */
 const CALLBACK_PATH = '/auth/callback';
@@ -75,7 +89,11 @@ const json = (body: unknown, status: number, headers: Record<string, string>): R
 		headers: { 'Content-Type': 'application/json', ...headers }
 	});
 
-export const handleTokenExchange = async (request: Request, env: Env): Promise<Response> => {
+export const handleTokenExchange = async (
+	request: Request,
+	env: Env,
+	ctx: Deferrable
+): Promise<Response> => {
 	const origin = allowedOrigin(request, env);
 	const cors = corsHeaders(origin);
 
@@ -124,6 +142,11 @@ export const handleTokenExchange = async (request: Request, env: Env): Promise<R
 	if ('error' in result.data) {
 		return json({ error: result.data.error }, 400, cors);
 	}
+
+	// Deferred, not awaited: identifying the user costs another GitHub round trip
+	// plus a D1 write, and the browser is blocked on a token it has already
+	// earned. `recordSignIn` never rejects, so nothing here can fail the sign-in.
+	ctx.waitUntil(recordSignIn(env, result.data.access_token, new Date()));
 
 	// The refresh token is deliberately dropped. It lives for six months, and the
 	// browser only needs the 8-hour access token; re-authorising is a silent
@@ -196,10 +219,14 @@ const REVOKE_PATH = '/revoke';
 
 // The token exchange stays on every other path, including the root, because
 // already-deployed clients post there with no path segment.
-const handleFetch = async (request: Request, env: Env): Promise<Response> =>
+const handleFetch = async (
+	request: Request,
+	env: Env,
+	ctx: ExecutionContext
+): Promise<Response> =>
 	new URL(request.url).pathname === REVOKE_PATH
 		? handleRevoke(request, env)
-		: handleTokenExchange(request, env);
+		: handleTokenExchange(request, env, ctx);
 
 // Cloudflare Workers require a default export; this is the framework exception
 // to the named-exports-only rule.

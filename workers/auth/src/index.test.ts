@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleRevoke, handleTokenExchange, type Env } from './index';
 
 const ENV: Env = {
 	GH_CLIENT_ID: 'test-client-id',
 	GH_CLIENT_SECRET: 'secret-never-leaves-the-worker',
-	ALLOWED_ORIGINS: 'https://gittok.dev,http://localhost:5174'
+	ALLOWED_ORIGINS: 'https://gittok.dev,http://localhost:5174',
+	// The registry has its own suite; here it only has to not throw.
+	DB: { prepare: () => ({ bind: () => ({ run: () => Promise.resolve({}) }) }) }
 };
 
 const ALLOWED_ORIGIN = 'https://gittok.dev';
@@ -27,11 +29,32 @@ const stubGitHub = (payload: unknown): void => {
 	);
 };
 
-afterEach(() => {
+const deferred: Promise<unknown>[] = [];
+
+/** Collects deferred work so it can be drained deliberately, not abandoned. */
+const CTX = {
+	waitUntil: (promise: Promise<unknown>): void => {
+		deferred.push(promise);
+	}
+};
+
+afterEach(async () => {
+	// `recordSignIn` is invoked before waitUntil receives it, so its GitHub call
+	// is already in flight. Draining here stops it resolving against the next
+	// test's fetch mock, which would corrupt that test's call assertions.
+	await Promise.all(deferred.splice(0));
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 describe('handleTokenExchange', () => {
+	beforeEach(() => {
+		// The deferred recording re-uses this suite's GitHub stub, which answers
+		// every URL with a token payload, so identifying the user always fails and
+		// logs. That path is asserted in users.test.ts; here it is just noise.
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+	});
+
 	it('answers preflight from an allowed origin with that exact origin', async () => {
 		// Given a browser preflight from the production site
 		const request = new Request('https://auth.gittok.dev/', {
@@ -40,7 +63,7 @@ describe('handleTokenExchange', () => {
 		});
 
 		// When the worker handles it
-		const response = await handleTokenExchange(request, ENV);
+		const response = await handleTokenExchange(request, ENV, CTX);
 
 		// Then it is approved, echoing the origin rather than a wildcard
 		expect(response.status).toBe(204);
@@ -53,7 +76,11 @@ describe('handleTokenExchange', () => {
 		stubGitHub({ access_token: 'stub-access-token' });
 
 		// When the worker handles it
-		const response = await handleTokenExchange(postFrom('https://evil.example', VALID_BODY), ENV);
+		const response = await handleTokenExchange(
+			postFrom('https://evil.example', VALID_BODY),
+			ENV,
+			CTX
+		);
 
 		// Then it is rejected outright and the client secret is never spent
 		expect(response.status).toBe(403);
@@ -68,7 +95,8 @@ describe('handleTokenExchange', () => {
 		// When the worker handles it
 		const response = await handleTokenExchange(
 			postFrom(ALLOWED_ORIGIN, { code: 'stub-auth-code' }),
-			ENV
+			ENV,
+			CTX
 		);
 
 		// Then the boundary parse fails before any upstream call
@@ -87,7 +115,7 @@ describe('handleTokenExchange', () => {
 		});
 
 		// When the worker completes the exchange
-		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV);
+		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV, CTX);
 		const payload: unknown = await response.json();
 
 		// Then only the short-lived token reaches the browser
@@ -104,7 +132,7 @@ describe('handleTokenExchange', () => {
 		stubGitHub({ access_token: 'stub-access-token', token_type: 'bearer' });
 
 		// When the worker responds
-		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV);
+		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV, CTX);
 
 		// Then the secret appears nowhere in the response body
 		expect(await response.text()).not.toContain(ENV.GH_CLIENT_SECRET);
@@ -115,7 +143,7 @@ describe('handleTokenExchange', () => {
 		stubGitHub({ error: 'bad_verification_code', error_description: 'expired' });
 
 		// When the worker completes the exchange
-		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV);
+		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV, CTX);
 
 		// Then the browser sees a real failure status
 		expect(response.status).toBe(400);
@@ -137,7 +165,7 @@ describe('handleTokenExchange', () => {
 		);
 
 		// When the worker exchanges the code
-		await handleTokenExchange(postFrom('http://localhost:5174', VALID_BODY), ENV);
+		await handleTokenExchange(postFrom('http://localhost:5174', VALID_BODY), ENV, CTX);
 
 		// Then GitHub is told the localhost callback, matching what was authorized
 		const sent: unknown = JSON.parse(sentBodies[0] ?? '{}');
@@ -155,10 +183,68 @@ describe('handleTokenExchange', () => {
 		});
 
 		// When the worker handles it
-		const response = await handleTokenExchange(request, ENV);
+		const response = await handleTokenExchange(request, ENV, CTX);
 
 		// Then it is refused
 		expect(response.status).toBe(405);
+	});
+
+	it('defers recording the sign-in rather than making the browser wait', async () => {
+		// Given a successful exchange
+		stubGitHub({ access_token: 'stub-access-token', token_type: 'bearer' });
+		const captured: Promise<unknown>[] = [];
+
+		// When the worker completes it
+		const response = await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV, {
+			waitUntil: (promise: Promise<unknown>): void => {
+				captured.push(promise);
+			}
+		});
+
+		// Then the token is already returned while the write is still outstanding
+		expect(response.status).toBe(200);
+		expect(captured).toHaveLength(1);
+		await Promise.all(captured);
+	});
+
+	it('records nothing when the exchange itself failed', async () => {
+		// Given GitHub rejecting the code
+		stubGitHub({ error: 'bad_verification_code' });
+		const captured: Promise<unknown>[] = [];
+
+		// When the worker handles it
+		await handleTokenExchange(postFrom(ALLOWED_ORIGIN, VALID_BODY), ENV, {
+			waitUntil: (promise: Promise<unknown>): void => {
+				captured.push(promise);
+			}
+		});
+
+		// Then no user is recorded, so a failed sign-in cannot invent an account
+		expect(captured).toEqual([]);
+	});
+
+	it('still returns the token when the sign-in cannot be recorded', async () => {
+		// Given a working exchange but a database that refuses writes
+		stubGitHub({ access_token: 'stub-access-token', token_type: 'bearer' });
+		const brokenEnv: Env = {
+			...ENV,
+			DB: {
+				prepare: () => ({
+					bind: () => ({ run: () => Promise.reject(new Error('D1_ERROR: unavailable')) })
+				})
+			}
+		};
+
+		// When the worker completes the exchange
+		const response = await handleTokenExchange(
+			postFrom(ALLOWED_ORIGIN, VALID_BODY),
+			brokenEnv,
+			CTX
+		);
+
+		// Then bookkeeping failure never costs the user their sign-in
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ access_token: 'stub-access-token' });
 	});
 });
 
