@@ -12,6 +12,10 @@
 	import { formatCount, timeAgo, isActive } from '$lib/format';
 	import ReadmeSkeleton from './ReadmeSkeleton.svelte';
 	import posthog from 'posthog-js';
+	import { get } from 'svelte/store';
+	import { session, beginSignIn } from '$lib/github/auth';
+	import { isStarred, star, unstar, NotAuthenticatedError } from '$lib/github/stars';
+	import { isAuthConfigured } from '$lib/github/config';
 
 	type Props = {
 		project: FeedProject;
@@ -20,9 +24,18 @@
 		retryReadme?: () => void;
 		/** Highlights the card as promoted placement. Must stay visibly labelled. */
 		promoted?: boolean;
+		/** True while this is the card currently in view — gates the one-time starred lookup. */
+		active?: boolean;
 	};
 
-	const { project, renderMarkdown, shareProject, retryReadme, promoted = false }: Props = $props();
+	const {
+		project,
+		renderMarkdown,
+		shareProject,
+		retryReadme,
+		promoted = false,
+		active = false
+	}: Props = $props();
 
 	const owner = $derived(project.full_name.split('/')[0]);
 	const repoUrl = $derived(`https://github.com/${owner}/${project.name}`);
@@ -37,6 +50,101 @@
 	const scrollToTop = (node: HTMLElement) => {
 		node.scrollTop = 0;
 		return { update: () => void (node.scrollTop = 0) };
+	};
+
+	/* --------------------------------------------------------------------- *
+	 * Star toggle
+	 * Starred state is unknown (`null`) until resolved — either when this
+	 * card becomes the active one and the user is signed in, or lazily on
+	 * first click. This avoids one API request per rendered card.
+	 * --------------------------------------------------------------------- */
+
+	const authAvailable = isAuthConfigured();
+
+	let starred = $state<boolean | null>(null);
+	let initialStarred = $state<boolean | null>(null);
+	let starPending = $state(false);
+	let resolvedFor: string | null = null;
+
+	// Keyed off the project identity (not index) so a recycled component
+	// instance never shows a previous card's optimistic star state.
+	$effect(() => {
+		if (resolvedFor === project.full_name) return;
+		resolvedFor = project.full_name;
+		starred = null;
+		initialStarred = null;
+		starPending = false;
+	});
+
+	$effect(() => {
+		// A snapshot read, not `$session` — that store is re-set on every
+		// isStarred/star/unstar call (see auth.ts's getAccessToken), and a
+		// reactive read here would re-trigger this effect mid-request.
+		if (!active || !authAvailable || !get(session) || starred !== null) return;
+		const fullName = project.full_name;
+		isStarred(fullName)
+			.then((result) => {
+				if (project.full_name !== fullName) return;
+				starred = result;
+				initialStarred = result;
+			})
+			.catch((error) => {
+				if (!(error instanceof NotAuthenticatedError)) {
+					console.error('Error checking star status:', error);
+				}
+			});
+	});
+
+	const displayStarred = $derived(starred === true);
+	const starCountDelta = $derived(
+		starred === null || initialStarred === null || starred === initialStarred ? 0 : starred ? 1 : -1
+	);
+	const displayedStarCount = $derived(project.stargazers_count + starCountDelta);
+
+	const starAriaLabel = $derived(
+		!$session
+			? `Sign in with GitHub to star ${project.name}`
+			: displayStarred
+				? `Unstar ${project.name} (${formatCount(displayedStarCount)} stars)`
+				: `Star ${project.name} (${formatCount(displayedStarCount)} stars)`
+	);
+
+	const toggleStar = async () => {
+		if (starPending) return;
+		const fullName = project.full_name;
+
+		if (!get(session)) {
+			beginSignIn(window.location.pathname + window.location.search);
+			return;
+		}
+
+		starPending = true;
+		const previous = starred;
+
+		try {
+			let current = previous;
+			if (current === null) {
+				current = await isStarred(fullName);
+				if (project.full_name !== fullName) return;
+				if (initialStarred === null) initialStarred = current;
+				starred = current;
+			}
+
+			const next = !current;
+			starred = next;
+			posthog.capture('star_repository', { repository: fullName, starred: next });
+
+			await (next ? star(fullName) : unstar(fullName));
+		} catch (error) {
+			if (project.full_name === fullName) starred = previous;
+			if (error instanceof NotAuthenticatedError) {
+				beginSignIn(window.location.pathname + window.location.search);
+			} else {
+				console.error('Error toggling star:', error);
+			}
+		} finally {
+			starPending = false;
+		}
 	};
 </script>
 
@@ -190,20 +298,41 @@
 			lg:bottom-28"
 	>
 		<div class="flex flex-col items-center gap-1">
-			<a
-				href={project.stargazersUrl}
-				target="_blank"
-				rel="noopener noreferrer"
-				onclick={() => posthog.capture('star_repository', { repository: project.full_name })}
-				class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-spark/40 flex h-11 w-11 items-center
-					justify-center rounded-full border backdrop-blur-md transition-all
-					duration-150 hover:scale-110 active:scale-95"
-				aria-label="Star {project.name} on GitHub ({formatCount(project.stargazers_count)} stars)"
-			>
-				<Star class="text-spark h-5 w-5" />
-			</a>
+			{#if authAvailable}
+				<button
+					type="button"
+					onclick={toggleStar}
+					disabled={starPending}
+					aria-pressed={displayStarred}
+					aria-label={starAriaLabel}
+					aria-busy={starPending}
+					class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-spark/40 flex h-11 w-11 items-center
+						justify-center rounded-full border backdrop-blur-md transition-all
+						duration-150 hover:scale-110 active:scale-95 disabled:cursor-wait disabled:opacity-70
+						disabled:hover:scale-100 {displayStarred ? 'border-spark/50' : ''}"
+				>
+					<Star
+						class="text-spark h-5 w-5"
+						fill={displayStarred ? 'currentColor' : 'none'}
+						aria-hidden="true"
+					/>
+				</button>
+			{:else}
+				<a
+					href={project.stargazersUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					onclick={() => posthog.capture('star_repository', { repository: project.full_name })}
+					class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-spark/40 flex h-11 w-11 items-center
+						justify-center rounded-full border backdrop-blur-md transition-all
+						duration-150 hover:scale-110 active:scale-95"
+					aria-label="Star {project.name} on GitHub ({formatCount(project.stargazers_count)} stars)"
+				>
+					<Star class="text-spark h-5 w-5" aria-hidden="true" />
+				</a>
+			{/if}
 			<span class="text-ink-300 font-mono text-[11px] tabular-nums">
-				{formatCount(project.stargazers_count)}
+				{formatCount(displayedStarCount)}
 			</span>
 		</div>
 

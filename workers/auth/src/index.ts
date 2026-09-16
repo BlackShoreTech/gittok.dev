@@ -29,10 +29,12 @@ const GitHubTokenResponse = z.union([
 export type Env = {
 	readonly GH_CLIENT_ID: string;
 	readonly GH_CLIENT_SECRET: string;
-	readonly GH_REDIRECT_URI: string;
 	/** Comma-separated exact origins permitted to spend the client secret. */
 	readonly ALLOWED_ORIGINS: string;
 };
+
+/** Must match the SPA route that receives GitHub's redirect. */
+const CALLBACK_PATH = '/auth/callback';
 
 const PREFLIGHT_HEADERS = {
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -51,12 +53,15 @@ const parseJson = (text: string): JsonParse => {
 	}
 };
 
-/** Empty headers mean "not allowed" — the caller turns that into a 403. */
-const corsHeaders = (origin: string | null, env: Env): Record<string, string> => {
+const allowedOrigin = (request: Request, env: Env): string | null => {
+	const origin = request.headers.get('Origin');
+	if (origin === null) return null;
 	const allowed = env.ALLOWED_ORIGINS.split(',').map((value) => value.trim());
-	if (origin === null || !allowed.includes(origin)) return {};
-	return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
+	return allowed.includes(origin) ? origin : null;
 };
+
+const corsHeaders = (origin: string | null): Record<string, string> =>
+	origin === null ? {} : { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
 
 const json = (body: unknown, status: number, headers: Record<string, string>): Response =>
 	new Response(JSON.stringify(body), {
@@ -65,7 +70,8 @@ const json = (body: unknown, status: number, headers: Record<string, string>): R
 	});
 
 export const handleTokenExchange = async (request: Request, env: Env): Promise<Response> => {
-	const cors = corsHeaders(request.headers.get('Origin'), env);
+	const origin = allowedOrigin(request, env);
+	const cors = corsHeaders(origin);
 
 	if (request.method === 'OPTIONS') {
 		return new Response(null, { status: 204, headers: { ...cors, ...PREFLIGHT_HEADERS } });
@@ -77,7 +83,7 @@ export const handleTokenExchange = async (request: Request, env: Env): Promise<R
 
 	// A browser would block the response anyway, but refusing here stops the
 	// endpoint being used as an open code-exchange oracle by a non-browser client.
-	if (Object.keys(cors).length === 0) {
+	if (origin === null) {
 		return json({ error: 'origin_not_allowed' }, 403, {});
 	}
 
@@ -97,7 +103,9 @@ export const handleTokenExchange = async (request: Request, env: Env): Promise<R
 			client_secret: env.GH_CLIENT_SECRET,
 			code: parsed.data.code,
 			code_verifier: parsed.data.code_verifier,
-			redirect_uri: env.GH_REDIRECT_URI
+			// Derived from the validated origin, so localhost and production each
+			// exchange against the redirect_uri they actually authorized with.
+			redirect_uri: `${origin}${CALLBACK_PATH}`
 		})
 	});
 

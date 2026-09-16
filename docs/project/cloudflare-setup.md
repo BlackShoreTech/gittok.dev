@@ -144,31 +144,41 @@ GH_CLIENT_SECRET=your_dev_client_secret
 
 ---
 
-## What the SPA still needs
+## How the SPA side fits together
 
-Not built yet — this doc covers infrastructure only.
+| File                                    | Owns                                                             |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| `src/lib/github/config.ts`              | Client ID + Worker URL. Sign-in hides itself if either is unset. |
+| `src/lib/github/auth.ts`                | PKCE material, CSRF `state`, the session in `localStorage`.      |
+| `src/routes/auth/callback/+page.svelte` | Verifies `state`, calls the Worker, returns to the feed.         |
+| `src/lib/github/stars.ts`               | `isStarred` / `star` / `unstar` against `api.github.com`.        |
 
-1. A sign-in button that generates a PKCE `code_verifier` + `state`, stores both
-   in `sessionStorage`, and redirects to
-   `https://github.com/login/oauth/authorize?client_id=…&redirect_uri=…&state=…&code_challenge=…&code_challenge_method=S256`.
-   Send **no** `scope` parameter — a GitHub App's permissions come from its settings.
-2. A `/auth/callback` route that verifies `state`, POSTs `{code, code_verifier}`
-   to the Worker, and keeps the returned `access_token` for its 8-hour life.
-3. Star/unstar via `PUT`/`DELETE https://api.github.com/user/starred/{owner}/{repo}`
-   with `Authorization: Bearer <token>`. On `401`, restart the flow — GitHub
-   redirects straight back without a second consent prompt.
+Flow: sign-in generates a `code_verifier` + `state` into `sessionStorage` and
+redirects to GitHub with `code_challenge_method=S256` and **no `scope`** (a GitHub
+App's permissions come from its settings). The callback verifies `state`, POSTs
+`{code, code_verifier}` to the Worker, and stores the 8-hour token.
 
-The Worker deliberately drops GitHub's `refresh_token` (6-month lifetime) so
-nothing long-lived ever reaches the browser.
+The Worker drops GitHub's `refresh_token` (6-month lifetime), so nothing
+long-lived reaches the browser. When a star call returns `401`, `stars.ts` clears
+the session and the UI restarts sign-in — GitHub redirects straight back without a
+second consent prompt.
 
-### Before shipping the token to the browser
+Starred state is resolved lazily, only for the card currently in view. Probing
+every rendered card would be one API request per card.
 
-Two prerequisites from the security review still stand:
+### Security prerequisites — both now done
 
-- **PostHog will capture the token** if it lands in a plain input or a session
-  replay. Session replay is enabled on this project. Any token-bearing input needs
-  `type="password"` and the `ph-no-capture` class.
-- **There is still no CSP.** The feed renders arbitrary third-party README HTML,
-  so a `connect-src` allowlist is what stops a sanitizer bypass from exfiltrating
-  a token. GitHub Pages cannot set response headers, so this has to be a
-  `<meta http-equiv="Content-Security-Policy">` tag until/unless hosting moves.
+- **PostHog no longer sees the auth code.** Session replay is enabled on this
+  project, and the callback URL carries `?code=`. `src/routes/+layout.ts` installs
+  a `sanitize_properties` hook that strips `code`/`state` from URL properties, and
+  the callback also `replaceState`s them out of the address bar immediately.
+  Nothing in this flow uses a token input, so `ph-no-capture` is not needed.
+- **A CSP now ships.** Configured in `svelte.config.js` (`kit.csp`, hash mode), so
+  SvelteKit hashes its own inline scripts and emits a `<meta>` tag — GitHub Pages
+  cannot set real headers. `connect-src` is the load-bearing directive: it is what
+  stops a DOMPurify bypass from exfiltrating the token. The GA snippet was moved
+  out of `app.html` into `static/analytics.js` so `script-src` can stay on `'self'`.
+
+> `upgrade-insecure-requests` is enabled so README badges linked over plain http
+> still render. It also upgrades same-origin requests, so a plain-http preview
+> (`DISABLE_HTTPS=1`) will not load. Dev and production are both https.

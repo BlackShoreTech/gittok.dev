@@ -3,9 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleTokenExchange, type Env } from './index';
 
 const ENV: Env = {
-	GH_CLIENT_ID: 'Iv1.test',
+	GH_CLIENT_ID: 'test-client-id',
 	GH_CLIENT_SECRET: 'secret-never-leaves-the-worker',
-	GH_REDIRECT_URI: 'https://gittok.dev/auth/callback',
 	ALLOWED_ORIGINS: 'https://gittok.dev,http://localhost:5174'
 };
 
@@ -121,6 +120,31 @@ describe('handleTokenExchange', () => {
 		// Then the browser sees a real failure status
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({ error: 'bad_verification_code' });
+	});
+
+	it('derives redirect_uri from the calling origin so local dev can sign in', async () => {
+		// Given a sign-in started from the local dev server rather than production
+		const sentBodies: string[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init: RequestInit) => {
+				sentBodies.push(String(init.body));
+				return new Response(
+					JSON.stringify({ access_token: 'stub-access-token', token_type: 'bearer' }),
+					{ status: 200 }
+				);
+			})
+		);
+
+		// When the worker exchanges the code
+		await handleTokenExchange(postFrom('http://localhost:5174', VALID_BODY), ENV);
+
+		// Then GitHub is told the localhost callback, matching what was authorized
+		const sent: unknown = JSON.parse(sentBodies[0] ?? '{}');
+		expect(sent).toMatchObject({
+			redirect_uri: 'http://localhost:5174/auth/callback',
+			client_secret: ENV.GH_CLIENT_SECRET
+		});
 	});
 
 	it('rejects a method other than POST', async () => {

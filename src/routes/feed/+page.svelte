@@ -14,7 +14,7 @@
 	import { Octokit } from '@octokit/rest';
 	import { baseUrl } from 'marked-base-url';
 	import { markedEmoji } from 'marked-emoji';
-	import { Info, SlidersHorizontal, ChevronDown, RefreshCw } from 'lucide-svelte';
+	import { Info, SlidersHorizontal, ChevronDown, RefreshCw, LogIn, LogOut } from 'lucide-svelte';
 	import type { FeedProject } from '$lib/github/feed';
 	import {
 		fetchProject,
@@ -22,6 +22,8 @@
 		getRandomSearchQuery,
 		searchRepositories
 	} from '$lib/github/feed';
+	import { session, beginSignIn, signOut, restoreSession } from '$lib/github/auth';
+	import { isAuthConfigured } from '$lib/github/config';
 
 	import RepoCard from '$lib/components/RepoCard.svelte';
 	import SpecialMessageCard from '$lib/components/SpecialMessageCard.svelte';
@@ -37,6 +39,9 @@
 	let loadError = $state<string | null>(null);
 	let showScrollHint = $state(true);
 	let scroller = $state<HTMLElement | null>(null);
+	let activeIndex = $state(0);
+
+	const authAvailable = isAuthConfigured();
 
 	// Reactive so the "seen" counter tracks it directly instead of being mirrored.
 	const viewedIndices = new SvelteSet<number>();
@@ -239,6 +244,7 @@
 				for (const entry of entries) {
 					if (!entry.isIntersecting) continue;
 
+					activeIndex = index;
 					setUrlParams(projects[index]);
 					if (index > 0) showScrollHint = false;
 
@@ -316,6 +322,7 @@
 
 	onMount(() => {
 		marked.use({ gfm: true });
+		restoreSession();
 		loadInitial();
 
 		// Cosmetic extras are fired off separately: neither should be able to
@@ -445,6 +452,34 @@
 				{topicLabel}
 			</a>
 
+			{#if authAvailable}
+				{#if $session}
+					<button
+						onclick={signOut}
+						class="border-ink-50/10 bg-ink-850/70 text-ink-300 hover:border-ink-50/25 hover:text-ink-50 relative flex
+							h-8 w-8 items-center justify-center rounded-full border backdrop-blur-md
+							transition-colors"
+						aria-label="Signed in with GitHub. Sign out"
+					>
+						<span
+							class="bg-signal absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full"
+							aria-hidden="true"
+						></span>
+						<LogOut class="h-4 w-4" />
+					</button>
+				{:else}
+					<button
+						onclick={() => beginSignIn(window.location.pathname + window.location.search)}
+						class="rounded-pill border-ink-50/10 bg-ink-850/70 text-ink-200 hover:border-ink-50/25 hover:text-ink-50 flex
+							items-center gap-1.5 border px-3 py-1.5 font-mono text-[11px]
+							backdrop-blur-md transition-colors"
+					>
+						<LogIn class="h-3.5 w-3.5" />
+						Sign in
+					</button>
+				{/if}
+			{/if}
+
 			<a
 				href="/about"
 				class="border-ink-50/10 bg-ink-850/70 text-ink-300 hover:border-ink-50/25 hover:text-ink-50 flex h-8 w-8
@@ -500,6 +535,7 @@
 						{shareProject}
 						promoted={project.id === PROMOTED_CARD}
 						retryReadme={() => retryReadme(index)}
+						active={index === activeIndex}
 					/>
 				{/if}
 			</div>
