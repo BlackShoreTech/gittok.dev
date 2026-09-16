@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# OAuth landing page. Carries single-use ?code=/?state= params and renders
+# nothing worth indexing.
+Disallow: /auth/
+
+# Development scratch route.
+Disallow: /test
+
+Sitemap: https://gittok.dev/sitemap.xml
