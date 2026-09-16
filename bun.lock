@@ -11,7 +11,6 @@
         "isomorphic-dompurify": "^4",
         "lucide-svelte": "^1",
         "marked": "^18",
-        "marked-base-url": "^1.1.10",
         "marked-emoji": "^3",
         "sql.js-httpvfs": "^0.8.12",
         "vite-plugin-mkcert": "^2",
@@ -695,8 +694,6 @@
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
     "marked": ["marked@18.0.13", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-xTxVzZsBFwunP6HDmtBkabUQEYArnP7/rMDGmPj9SlrKlQ4i8MdYVow+nJL0eOqwpUqhzBoTBRADGN6uYwPyOw=="],
-
-    "marked-base-url": ["marked-base-url@1.1.10", "", { "peerDependencies": { "marked": ">= 4 < 19" } }, "sha512-Szoa+MAjZg1eiDiYrzK3JwJrgRPG7gvVyf858eOonKJKJB2JGP+Z6V83gvH85labGN1VHPgANq3Jk4V47u9xAA=="],
 
     "marked-emoji": ["marked-emoji@3.0.0", "", { "peerDependencies": { "marked": ">=4 <19" } }, "sha512-4IODef6jiQfuRsWOXSH/q9YiXmpVemvm1raj4WmObkWeAPg5bMMPTvbDpxbn4BIvbM245a1Dhq6RAzCS0WFGOw=="],
 

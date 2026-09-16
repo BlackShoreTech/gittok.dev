@@ -62,7 +62,6 @@
 		"isomorphic-dompurify": "^4",
 		"lucide-svelte": "^1",
 		"marked": "^18",
-		"marked-base-url": "^1.1.10",
 		"marked-emoji": "^3",
 		"sql.js-httpvfs": "^0.8.12",
 		"vite-plugin-mkcert": "^2"
