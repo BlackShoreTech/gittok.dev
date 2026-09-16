@@ -1,14 +1,24 @@
-# Purpose: Automatically update GitHub curated topics list daily
-# Context: Keeps the application's topic list fresh and up-to-date
+# Purpose: Refresh the curated topic list, the stargazer database, and the
+#          featured-repo selection once a day.
+# Context: Three independent data refreshes share one job because they run
+#          against the same checkout and commit to the same branch.
 
 name: Update Topics
 
 on:
   schedule:
-    # Runs at 00:00 UTC every day
-    - cron: '0 0 * * *'
+    # Deliberately off the top of the hour. GitHub queues scheduled workflows
+    # and drops the ones it cannot service; 00:00 UTC is the single most
+    # contended slot, which is why historical runs landed anywhere from 01:25
+    # to 04:45. An off-peak, off-hour minute gets picked up far closer to the
+    # requested time, which keeps the stargazer lookback window honest.
+    - cron: '17 4 * * *'
   # Allow manual trigger
   workflow_dispatch:
+
+concurrency:
+  group: update-topics
+  cancel-in-progress: false
 
 jobs:
   update-topics:
@@ -28,25 +38,72 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # Each data step is allowed to fail without taking the others with it.
+      # They are independent refreshes, and before this the stargazer step
+      # failing meant topics and featured repos silently stopped updating too.
+      # `Report data step failures` at the end still fails the job, so a
+      # breakage is never swallowed.
+
+      # scripts/get_all_stars.ts reads process.env.GITHUB_TOKEN. Without it the
+      # Octokit client is anonymous and the stargazers endpoint returns 401,
+      # which is exactly what broke this workflow for 72 consecutive days.
       - name: Update stars
+        id: stars
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run update-stars
 
       - name: Update topics
+        id: topics
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run update-topics
 
       - name: Update featured repos
+        id: featured
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run feature-repos
 
+      # Previously only all_topics.ts was checked and staged, so the two files
+      # the featured-repo system actually produces were written on every run
+      # and then thrown away with the runner. featured_repos.json had not
+      # changed since Feb 2025 as a result.
       - name: Check for changes
         id: check_changes
         run: |
-          git diff --quiet src/lib/all_topics.ts || echo "changes=true" >> $GITHUB_OUTPUT
+          git add -A src/lib/all_topics.ts static/data/featured_repos.json static/data/db.sqlite
+          if git diff --cached --quiet; then
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+            echo "No data changes to commit."
+          else
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
 
+      # No [skip ci] here on purpose. The site is statically built and serves
+      # featured_repos.json and db.sqlite as deployed assets, so a data commit
+      # that skips CI never reaches production. update-database.yml itself only
+      # runs on schedule/dispatch, so letting deploy.yml run cannot loop.
       - name: Commit and push if changed
         if: steps.check_changes.outputs.changes == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add src/lib/all_topics.ts
-          git commit -m "chore: update curated topics list [skip ci]"
+          git commit -m "chore: refresh topics, stargazers and featured repos"
           git push
+
+      - name: Report data step failures
+        if: >-
+          steps.stars.outcome == 'failure' ||
+          steps.topics.outcome == 'failure' ||
+          steps.featured.outcome == 'failure'
+        run: |
+          echo "::error::One or more data refresh steps failed."
+          echo "update-stars:  ${{ steps.stars.outcome }}"
+          echo "update-topics: ${{ steps.topics.outcome }}"
+          echo "feature-repos: ${{ steps.featured.outcome }}"
+          exit 1
