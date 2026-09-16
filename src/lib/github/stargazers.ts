@@ -2,7 +2,7 @@
 // Context: Used to fetch and store stargazer information and their repositories
 
 import { Octokit } from "@octokit/rest";
-import { fetchAllRecentStargazers } from "./api";
+import { fetchAllRecentStargazers, getLookbackDays } from "./api";
 import { upsertStargazer, processStargazerRepositories, printRecentStatistics } from "./db";
 
 export async function fetchRecentStargazers(octokit: Octokit, owner: string, repo: string) {
@@ -21,7 +21,7 @@ export async function fetchRecentStargazers(octokit: Octokit, owner: string, rep
       await processStargazerRepositories(octokit, stargazer);
     }
 
-    await printRecentStatistics();
+    await printRecentStatistics(getLookbackDays());
 
   } catch (error) {
     console.error('Error fetching or processing stargazers:', error);
