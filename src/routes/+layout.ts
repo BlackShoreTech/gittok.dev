@@ -4,7 +4,11 @@ import posthog from 'posthog-js';
 import { browser } from '$app/environment';
 
 export const prerender = true;
-export const ssr = false;
+
+// SSR is deliberately NOT disabled here. It used to be, which meant every route
+// prerendered to an empty <body> containing only the bootstrap script — no
+// crawlable content anywhere on the site. Routes that genuinely cannot render
+// on the server opt out individually via their own `export const ssr = false`.
 
 /**
  * The OAuth callback lands on `/auth/callback?code=…&state=…`. Session replay is
