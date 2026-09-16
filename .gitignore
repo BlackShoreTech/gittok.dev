@@ -32,3 +32,6 @@ vite.config.ts.timestamp-*
 # Imported design skills/docs (from coso.ai/cm-platform)
 .agents/skills/app-design-principles/
 docs/design-principles/
+
+# Coding-agent session scratch
+.omo/
