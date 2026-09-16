@@ -5,7 +5,8 @@
 -->
 
 <script lang="ts">
-	import { Star, Github, ArrowUpRight, ChevronDown } from 'lucide-svelte';
+	import { Star, ArrowUpRight, ChevronDown } from 'lucide-svelte';
+	import GithubIcon from './icons/GithubIcon.svelte';
 	import type { FeedProject } from '$lib/github/feed';
 
 	type Props = { project: FeedProject };
@@ -51,7 +52,7 @@
 					</span>
 				</li>
 				<li class="flex items-start gap-3">
-					<Github class="text-ink-400 mt-0.5 h-4 w-4 flex-none" />
+					<GithubIcon class="text-ink-400 mt-0.5 h-4 w-4 flex-none" />
 					<span class="text-ink-300 text-sm leading-relaxed">
 						Optionally open a PR with your project's details to improve how it's presented.
 					</span>

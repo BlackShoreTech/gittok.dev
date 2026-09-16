@@ -1,6 +1,8 @@
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+// From 'vitest/config' rather than 'vite': Vitest 4+ no longer augments Vite's
+// own config type with the `test` key.
+import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { promises as fs } from 'fs';
@@ -78,7 +80,8 @@ export default defineConfig({
 		}
 	],
 	test: {
-		workspace: [
+		// Renamed from `workspace` in Vitest 4.
+		projects: [
 			{
 				extends: './vite.config.ts',
 				plugins: [svelteTesting()],

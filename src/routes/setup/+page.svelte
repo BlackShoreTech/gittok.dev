@@ -9,6 +9,7 @@
 	import { topics } from '$lib/topics';
 	import { topicsStore } from '$lib/stores/topics';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Search, X, ArrowRight, Plus, Sparkles } from 'lucide-svelte';
 	import TopicGroup from '$lib/components/TopicGroup.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
@@ -210,7 +211,7 @@
 		</p>
 
 		<button
-			onclick={() => goto('/feed')}
+			onclick={() => goto(resolve('/feed'))}
 			class="group rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex items-center gap-2 px-5
 				py-2.5 text-sm font-semibold transition-transform duration-150
 				hover:scale-[1.02] active:scale-[0.99]"

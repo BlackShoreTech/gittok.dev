@@ -6,6 +6,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
 	import { topicsStore } from '$lib/stores/topics';
@@ -32,13 +33,15 @@
 	const FEATURED_CTA_CARD = '-4';
 
 	let projects = $state<FeedProject[]>([]);
-	let viewedCount = $state(0);
 	let isLoading = $state(false);
 	let loadError = $state<string | null>(null);
 	let showScrollHint = $state(true);
 	let scroller = $state<HTMLElement | null>(null);
 
-	const viewedIndices = new Set<number>();
+	// Reactive so the "seen" counter tracks it directly instead of being mirrored.
+	const viewedIndices = new SvelteSet<number>();
+	const viewedCount = $derived(viewedIndices.size);
+
 	let hasShownFollowMessage = false;
 	let hasShownFeaturedMessage = false;
 	let featuredRepos: FeedProject[] = [];
@@ -241,7 +244,6 @@
 
 					if (!viewedIndices.has(index)) {
 						viewedIndices.add(index);
-						viewedCount = viewedIndices.size;
 						interject(index);
 					}
 

@@ -7,7 +7,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
-	import { Star, GitFork, ArrowRight, MessageSquareQuote, Github } from 'lucide-svelte';
+	import { Star, GitFork, ArrowRight, MessageSquareQuote } from 'lucide-svelte';
+	import GithubIcon from '$lib/components/icons/GithubIcon.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
 	import { topicsStore } from '$lib/stores/topics';
 
@@ -192,7 +193,7 @@
 				rel="noopener noreferrer"
 				class="hover:text-ink-200 flex items-center gap-1.5 transition-colors"
 			>
-				<Github class="h-3.5 w-3.5" />
+				<GithubIcon class="h-3.5 w-3.5" />
 				Source on GitHub
 			</a>
 		</footer>

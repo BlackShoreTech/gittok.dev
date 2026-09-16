@@ -6,17 +6,10 @@
 -->
 
 <script lang="ts">
-	import {
-		ArrowLeft,
-		ArrowUpRight,
-		GitPullRequest,
-		Github,
-		Globe,
-		Share2,
-		Star,
-		Twitter
-	} from 'lucide-svelte';
+	import { ArrowLeft, ArrowUpRight, GitPullRequest, Globe, Share2, Star } from 'lucide-svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
+	import GithubIcon from '$lib/components/icons/GithubIcon.svelte';
+	import XIcon from '$lib/components/icons/XIcon.svelte';
 
 	const REPO = 'https://github.com/BlackShoreTech/gittok.dev';
 
@@ -35,9 +28,9 @@
 			href: null
 		},
 		{
-			icon: Twitter,
+			icon: XIcon,
 			title: 'Follow along',
-			detail: 'New features get posted first on Twitter.',
+			detail: 'New features get posted first on X.',
 			href: 'https://twitter.com/brsc2909'
 		}
 	];
@@ -51,9 +44,9 @@
 			href: 'https://brendanscullion.com'
 		},
 		{
-			icon: Twitter,
+			icon: XIcon,
 			label: '@brsc2909',
-			detail: 'Twitter',
+			detail: 'X',
 			href: 'https://twitter.com/brsc2909'
 		}
 	];
@@ -108,7 +101,7 @@
 					justify-center gap-2 px-6 py-3.5 text-[0.9375rem] font-semibold
 					transition-transform duration-150 hover:scale-[1.02] active:scale-[0.99] sm:w-auto"
 			>
-				<Github class="h-4 w-4" />
+				<GithubIcon class="h-4 w-4" />
 				Star on GitHub
 			</a>
 		</div>
@@ -198,7 +191,7 @@
 			rel="noopener noreferrer"
 			class="hover:text-ink-200 flex items-center gap-1.5 transition-colors"
 		>
-			<Github class="h-3.5 w-3.5" />
+			<GithubIcon class="h-3.5 w-3.5" />
 			Source on GitHub
 		</a>
 	</footer>

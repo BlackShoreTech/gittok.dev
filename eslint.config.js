@@ -30,5 +30,14 @@ export default ts.config(
 				parser: ts.parser
 			}
 		}
+	},
+	{
+		rules: {
+			// GitTok is a static SPA served from the domain root with no base path,
+			// and most hrefs here are external GitHub/X URLs built at runtime, which
+			// this rule cannot verify. Navigation calls are still checked. Turn this
+			// back on if a base path is ever introduced.
+			'svelte/no-navigation-without-resolve': ['error', { ignoreLinks: true }]
+		}
 	}
 );
