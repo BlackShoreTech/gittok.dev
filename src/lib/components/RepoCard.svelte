@@ -24,10 +24,11 @@
 		type StarFailureReason
 	} from '$lib/github/stars';
 	import { isAuthConfigured } from '$lib/github/config';
+	import type { RepoRef } from '$lib/github/readme-urls';
 
 	type Props = {
 		project: FeedProject;
-		renderMarkdown: (content: string, repo: string) => string;
+		renderMarkdown: (content: string, ref: RepoRef) => string;
 		shareProject: (project: FeedProject) => Promise<void>;
 		retryReadme?: () => void;
 		/** Highlights the card as promoted placement. Must stay visibly labelled. */
@@ -290,10 +291,11 @@
 						<!-- renderMarkdown runs every README through DOMPurify with an explicit
 							 tag and attribute allowlist before it reaches here. -->
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html renderMarkdown(
-							project.readmeSnippet,
-							`https://github.com/${owner}/${project.name}/${project.default_branch}/`
-						)}
+						{@html renderMarkdown(project.readmeSnippet, {
+							owner,
+							repo: project.name,
+							branch: project.default_branch
+						})}
 					</div>
 				{/if}
 			</div>

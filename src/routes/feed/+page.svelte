@@ -12,7 +12,6 @@
 	import { topicsStore } from '$lib/stores/topics';
 	import { topics as allTopics } from '$lib/all_topics';
 	import { Octokit } from '@octokit/rest';
-	import { baseUrl } from 'marked-base-url';
 	import { markedEmoji } from 'marked-emoji';
 	import { Info, SlidersHorizontal, ChevronDown, RefreshCw, LogIn, LogOut } from 'lucide-svelte';
 	import type { FeedProject } from '$lib/github/feed';
@@ -24,6 +23,7 @@
 	} from '$lib/github/feed';
 	import { session, beginSignIn, disconnect, restoreSession } from '$lib/github/auth';
 	import { isAuthConfigured } from '$lib/github/config';
+	import { resolveReadmeUrls, type RepoRef } from '$lib/github/readme-urls';
 
 	import Seo from '$lib/components/Seo.svelte';
 	import RepoCard from '$lib/components/RepoCard.svelte';
@@ -347,10 +347,14 @@
 	 * Rendering
 	 * --------------------------------------------------------------------- */
 
-	const renderMarkdown = (content: string, repo: string): string => {
-		marked.use(baseUrl(repo));
+	const renderMarkdown = (content: string, ref: RepoRef): string => {
 		const rawHtml = marked.parse(content, { async: false }) as string;
-		return DOMPurify.sanitize(rawHtml, {
+
+		// Sanitise to a fragment rather than a string so relative paths can be
+		// resolved on real elements afterwards. Doing it here instead of via a
+		// markdown base URL is what catches raw <img> tags embedded in a README.
+		const fragment = DOMPurify.sanitize(rawHtml, {
+			RETURN_DOM_FRAGMENT: true,
 			USE_PROFILES: { html: true },
 			ALLOWED_TAGS: [
 				'h1',
@@ -388,6 +392,12 @@
 			// texture that makes a README recognisable at a glance.
 			ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'src', 'alt', 'width', 'height', 'align']
 		});
+
+		resolveReadmeUrls(fragment, ref);
+
+		const holder = document.createElement('div');
+		holder.append(fragment);
+		return holder.innerHTML;
 	};
 
 	const shareProject = async (project: FeedProject) => {
