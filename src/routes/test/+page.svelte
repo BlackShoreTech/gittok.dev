@@ -31,6 +31,14 @@
   });
 </script>
 
+<!-- A development scratch route. It prerenders real content now that SSR is on,
+     so it needs an explicit noindex; robots.txt Disallow stops crawling but does
+     not stop indexing on its own. -->
+<svelte:head>
+  <title>Database Test · GitTok</title>
+  <meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <div class="min-h-screen bg-gradient-to-b from-gray-900 to-black text-gray-100 p-6">
   <div class="max-w-4xl mx-auto">
     <h1 class="text-4xl font-serif mb-8">Database Test Page</h1>
