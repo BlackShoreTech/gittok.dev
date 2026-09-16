@@ -13,6 +13,7 @@
 	import { Search, X, ArrowRight, Plus, Sparkles } from 'lucide-svelte';
 	import TopicGroup from '$lib/components/TopicGroup.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 
 	// A short, opinionated starting set beats an empty search box.
 	const popular = [
@@ -68,6 +69,13 @@
 		if (term) pick(matches[0] ?? term);
 	}
 </script>
+
+<Seo
+	title="Pick Your Topics — GitTok"
+	description="Choose the languages and topics you care about, and GitTok tailors the repository feed to match."
+	path="/setup"
+	imageAlt="Choose the topics your GitTok feed is built from"
+/>
 
 <AmbientBackdrop />
 

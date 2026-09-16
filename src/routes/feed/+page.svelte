@@ -25,6 +25,7 @@
 	import { session, beginSignIn, signOut, restoreSession } from '$lib/github/auth';
 	import { isAuthConfigured } from '$lib/github/config';
 
+	import Seo from '$lib/components/Seo.svelte';
 	import RepoCard from '$lib/components/RepoCard.svelte';
 	import SpecialMessageCard from '$lib/components/SpecialMessageCard.svelte';
 	import FeedCardSkeleton from '$lib/components/FeedCardSkeleton.svelte';
@@ -408,6 +409,13 @@
 		await navigator.clipboard.writeText(shareUrl);
 	};
 </script>
+
+<Seo
+	title="The Feed — Trending GitHub Repositories | GitTok"
+	description="Scroll a full-screen feed of GitHub repositories. Read the README, star what's good, and keep going."
+	path="/feed"
+	imageAlt="The GitTok feed — one GitHub repository per screen"
+/>
 
 <svelte:window onkeydown={onKeydown} />
 

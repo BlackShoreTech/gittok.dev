@@ -10,7 +10,23 @@
 	import { Star, GitFork, ArrowRight, MessageSquareQuote } from 'lucide-svelte';
 	import GithubIcon from '$lib/components/icons/GithubIcon.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { topicsStore } from '$lib/stores/topics';
+
+	const structuredData = {
+		'@context': 'https://schema.org',
+		'@type': 'WebApplication',
+		name: 'GitTok',
+		url: 'https://gittok.dev/',
+		applicationCategory: 'DeveloperApplication',
+		operatingSystem: 'Any',
+		browserRequirements: 'Requires JavaScript.',
+		description:
+			'A full-screen, swipeable feed of GitHub repositories. Read the README, star what is good, keep scrolling.',
+		image: 'https://gittok.dev/og-image.png',
+		offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+		author: { '@type': 'Person', name: 'Brendan Scullion' }
+	};
 
 	let currentQuote = $state(0);
 	let returning = $state(false);
@@ -41,6 +57,17 @@
 		return () => clearInterval(interval);
 	});
 </script>
+
+<Seo
+	title="GitTok — Discover Trending GitHub Projects"
+	description="A full-screen, swipeable feed of GitHub repositories. Read the README, star what's good, keep scrolling. The same habit, pointed somewhere useful."
+	path="/"
+	imageAlt="GitTok — a TikTok-style feed for discovering GitHub repositories"
+/>
+
+<svelte:head>
+	{@html `<script type="application/ld+json">${JSON.stringify(structuredData)}<\/script>`}
+</svelte:head>
 
 <AmbientBackdrop />
 

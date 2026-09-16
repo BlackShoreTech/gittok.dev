@@ -8,6 +8,7 @@
 <script lang="ts">
 	import { ArrowLeft, ArrowUpRight, GitPullRequest, Globe, Share2, Star } from 'lucide-svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import GithubIcon from '$lib/components/icons/GithubIcon.svelte';
 	import XIcon from '$lib/components/icons/XIcon.svelte';
 
@@ -51,6 +52,13 @@
 		}
 	];
 </script>
+
+<Seo
+	title="About GitTok — How It Works & How to Get Featured"
+	description="What GitTok is, how the feed picks repositories, and how to get your own open-source project featured: star the repo and your pinned projects become eligible."
+	path="/about"
+	imageAlt="About GitTok"
+/>
 
 <AmbientBackdrop />
 
