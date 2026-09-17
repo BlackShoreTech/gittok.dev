@@ -7,7 +7,8 @@
 
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import { Star, GitFork, Share2, ArrowUpRight, RefreshCw } from 'lucide-svelte';
+	import { Star, GitFork, Share2, ArrowUpRight, RefreshCw, EyeOff } from 'lucide-svelte';
+	import type { SignalKind } from '$lib/taste/types';
 	import type { FeedProject } from '$lib/github/feed';
 	import { languageColors } from '$lib/github/feed';
 	import { formatCount, timeAgo, isActive } from '$lib/format';
@@ -35,6 +36,8 @@
 		promoted?: boolean;
 		/** True while this is the card currently in view — gates the one-time starred lookup. */
 		active?: boolean;
+		/** Reports a deliberate act to the taste profile. Passive dwell is measured by the feed. */
+		onSignal?: (kind: SignalKind) => void;
 	};
 
 	const {
@@ -43,8 +46,13 @@
 		shareProject,
 		retryReadme,
 		promoted = false,
-		active = false
+		active = false,
+		onSignal
 	}: Props = $props();
+
+	// Set once the reader rejects the card, so the rail can acknowledge it. The
+	// feed decides what to do with the signal; this only closes the loop.
+	let dismissed = $state(false);
 
 	const owner = $derived(project.full_name.split('/')[0]);
 	const repoUrl = $derived(`https://github.com/${owner}/${project.name}`);
@@ -159,6 +167,10 @@
 			// counted every failed star as a success, which reported a wholly
 			// broken feature as working.
 			posthog.capture('star_repository', { repository: fullName, starred: next });
+
+			// Only starring is evidence of interest. Unstarring is a correction,
+			// not a rejection, so it teaches nothing either way.
+			if (next) onSignal?.('star');
 		} catch (error) {
 			if (project.full_name === fullName) starred = previous;
 
@@ -307,7 +319,10 @@
 				href={repoUrl}
 				target="_blank"
 				rel="noopener noreferrer"
-				onclick={() => posthog.capture('view_repository', { repository: project.full_name })}
+				onclick={() => {
+					posthog.capture('view_repository', { repository: project.full_name });
+					onSignal?.('open');
+				}}
 				class="group rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex w-full items-center
 					justify-center gap-2 px-5 py-3 text-[0.9375rem] font-semibold
 					transition-transform duration-150 hover:scale-[1.01] active:scale-[0.99]"
@@ -399,7 +414,10 @@
 				href={project.forksUrl}
 				target="_blank"
 				rel="noopener noreferrer"
-				onclick={() => posthog.capture('fork_repository', { repository: project.full_name })}
+				onclick={() => {
+					posthog.capture('fork_repository', { repository: project.full_name });
+					onSignal?.('fork');
+				}}
 				class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-ink-50/25 flex h-11 w-11 items-center
 					justify-center rounded-full border backdrop-blur-md transition-all
 					duration-150 hover:scale-110 active:scale-95"
@@ -416,6 +434,7 @@
 			<button
 				onclick={() => {
 					posthog.capture('share_repository', { repository: project.full_name });
+					onSignal?.('share');
 					shareProject(project);
 				}}
 				class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-accent-400/40 flex h-11 w-11 items-center
@@ -426,6 +445,31 @@
 				<Share2 class="text-ink-200 h-5 w-5" />
 			</button>
 			<span class="text-ink-300 font-mono text-[11px]">Share</span>
+		</div>
+
+		<!-- Lowest tier on purpose: the rail's job is to celebrate repositories,
+		     not to invite rejection. But without an explicit "no", the profile can
+		     only ever infer disinterest from a fast scroll, which is weak evidence. -->
+		<div class="flex flex-col items-center gap-1">
+			<button
+				type="button"
+				disabled={dismissed}
+				onclick={() => {
+					dismissed = true;
+					onSignal?.('not_interested');
+				}}
+				class="ease-out-quint flex h-11 w-11 items-center justify-center rounded-full
+					transition-all duration-150 hover:scale-110 active:scale-95
+					disabled:hover:scale-100 {dismissed ? 'text-signal' : 'text-ink-500 hover:text-ink-200'}"
+				aria-label={dismissed
+					? `Noted — fewer repositories like ${project.name}`
+					: `Show me fewer repositories like ${project.name}`}
+			>
+				<EyeOff class="h-5 w-5" aria-hidden="true" />
+			</button>
+			<span class="font-mono text-[11px] {dismissed ? 'text-signal' : 'text-ink-300'}">
+				{dismissed ? 'Noted' : 'Less'}
+			</span>
 		</div>
 	</div>
 </div>

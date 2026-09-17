@@ -9,7 +9,6 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
-	import { topicsStore } from '$lib/stores/topics';
 	import { topics as allTopics } from '$lib/all_topics';
 	import { Octokit } from '@octokit/rest';
 	import { markedEmoji } from 'marked-emoji';
@@ -17,6 +16,19 @@
 	import type { FeedProject, QueryMemory } from '$lib/github/feed';
 	import { fetchFeedPage, fetchProject, fetchReadme, shuffle } from '$lib/github/feed';
 	import { dropSeen, loadSeenRepoIds, rememberRepoIds } from '$lib/github/seen';
+	import posthog from 'posthog-js';
+	import { filterCount, filterStore, isFilterActive } from '$lib/stores/filter';
+	import { applySessionDecay, loadProfile, observeRepos, saveProfile } from '$lib/taste/profile';
+	import { applySignal } from '$lib/taste/attribution';
+	import { rankBatch, sampleTopic } from '$lib/taste/ranking';
+	import {
+		DWELL_LONG_MS,
+		DWELL_MEDIUM_MS,
+		DWELL_SKIP_MS,
+		emptyProfile,
+		type SignalKind,
+		type TasteProfile
+	} from '$lib/taste/types';
 	import { session, beginSignIn, disconnect, restoreSession } from '$lib/github/auth';
 	import { isAuthConfigured } from '$lib/github/config';
 	import { resolveReadmeUrls, type RepoRef } from '$lib/github/readme-urls';
@@ -24,6 +36,7 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import RepoCard from '$lib/components/RepoCard.svelte';
 	import SpecialMessageCard from '$lib/components/SpecialMessageCard.svelte';
+	import FilterPanel from '$lib/components/FilterPanel.svelte';
 	import FeedCardSkeleton from '$lib/components/FeedCardSkeleton.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
 
@@ -50,28 +63,117 @@
 	let seenQueries: Record<string, QueryMemory> = {};
 
 	// Survives a reload, which is the whole point: a refresh should open on
-	// something the reader has not already been shown.
+	// something the reader has not already been shown. Only cards the reader
+	// actually reached are written here.
 	let seenRepoIds = new Set<string>();
 
-	const topicLabel = $derived(
-		$topicsStore.size > 0
-			? `${$topicsStore.size} topic${$topicsStore.size === 1 ? '' : 's'}`
-			: 'All topics'
-	);
+	// Everything drawn this session, viewed or not. Two consecutive searches can
+	// overlap, so the queue still needs de-duplicating — but queuing a card is
+	// not the same as showing it, and only the latter should burn it for good.
+	const queuedIds = new SvelteSet<string>();
+
+	let profile: TasteProfile = emptyProfile();
+
+	let filterOpen = $state(false);
+
+	// The filter the current queue was drawn against. Changing it has to rebuild
+	// the feed — otherwise the reader narrows the feed, sees the cards already
+	// queued under the old filter, and concludes the control does nothing.
+	let appliedFilter = '';
+
+	const closeFilter = () => {
+		filterOpen = false;
+
+		const next = JSON.stringify($filterStore);
+		if (next === appliedFilter) return;
+
+		appliedFilter = next;
+		projects = [];
+		viewedIndices.clear();
+		scroller?.scrollTo({ top: 0 });
+		loadInitial(false);
+	};
+
+	const filterActive = $derived(isFilterActive($filterStore));
+	const filterLabel = $derived.by(() => {
+		const count = filterCount($filterStore);
+		return count ? `${count} filter${count === 1 ? '' : 's'}` : 'Filter';
+	});
+
+	/** Interjected growth cards carry no real repository to learn from. */
+	const isRealRepo = (project: FeedProject) =>
+		project.id !== FOLLOW_CARD &&
+		project.id !== FEATURED_CTA_CARD &&
+		project.full_name.includes('/');
+
+	const recordSignal = (project: FeedProject, kind: SignalKind) => {
+		if (!isRealRepo(project)) return;
+
+		profile = applySignal(profile, {
+			kind,
+			topics: project.topics,
+			language: project.language,
+			// Topics the reader was shown because they filtered for them are not
+			// evidence of taste. Crediting them would let one filtering session
+			// permanently bias the ambient feed.
+			suppressed: $filterStore.topics
+		});
+		saveProfile(profile);
+	};
+
+	const recordDwell = (project: FeedProject, elapsed: number, position: number) => {
+		const kind: SignalKind | null =
+			elapsed >= DWELL_LONG_MS
+				? 'dwell_long'
+				: elapsed >= DWELL_MEDIUM_MS
+					? 'dwell_medium'
+					: elapsed < DWELL_SKIP_MS
+						? 'skip_fast'
+						: null;
+
+		if (kind) recordSignal(project, kind);
+		if (!isRealRepo(project)) return;
+
+		// Emitted on exit rather than on entry: by then the dwell is known, so one
+		// event carries what two would have. Without this the product cannot tell
+		// whether personalisation improved anything — there was no impression
+		// event of any kind before.
+		posthog.capture('repo_viewed', {
+			repository: project.full_name,
+			language: project.language,
+			dwell_ms: Math.round(elapsed),
+			engagement: kind ?? 'dwell_short',
+			position,
+			filtered: isFilterActive($filterStore)
+		});
+	};
 
 	/* --------------------------------------------------------------------- *
 	 * Loading
 	 * --------------------------------------------------------------------- */
 
 	const nextBatch = async (octokit: Octokit) => {
-		const pool = $topicsStore.size > 0 ? [...$topicsStore] : allTopics;
-		const batch = dropSeen(await fetchFeedPage(octokit, pool, seenQueries), seenRepoIds);
+		// An explicit filter is the only thing that may narrow the pool. Taste
+		// never removes a topic from consideration — it only changes the odds of
+		// drawing one, via `chooseTopic`. That separation is the whole point:
+		// picking a topic used to collapse the feed to that topic forever.
+		const pool = $filterStore.topics.length ? [...$filterStore.topics] : [...allTopics];
 
-		rememberRepoIds(
-			seenRepoIds,
-			batch.map((project) => project.id)
-		);
-		return batch;
+		const drawn = await fetchFeedPage(octokit, pool, seenQueries, Math.random, {
+			language: $filterStore.language,
+			starBand: $filterStore.starBand,
+			chooseTopic: (candidates, random) => sampleTopic(profile, candidates, random)
+		});
+
+		const batch = dropSeen(drawn, queuedIds);
+		for (const project of batch) queuedIds.add(project.id);
+
+		// Every card shown is a sample of what exists, which is what lets rarity
+		// weighting calibrate itself without shipping a frequency table.
+		profile = observeRepos(profile, batch);
+		saveProfile(profile);
+
+		return rankBatch(profile, batch);
 	};
 
 	const loadMoreProjects = async (index: number) => {
@@ -247,17 +349,33 @@
 	};
 
 	const observeElement = (element: HTMLElement, index: number) => {
+		// Entry-to-exit time is the only passive signal the feed has. It is also
+		// the most abundant one: readers skip far more than they star.
+		let enteredAt = 0;
+
 		const observer = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {
-					if (!entry.isIntersecting) continue;
+					if (!entry.isIntersecting) {
+						const project = projects[index];
+						if (enteredAt && project) recordDwell(project, performance.now() - enteredAt, index);
+						enteredAt = 0;
+						continue;
+					}
 
+					enteredAt = performance.now();
 					activeIndex = index;
 					setUrlParams(projects[index]);
 					if (index > 0) showScrollHint = false;
 
 					if (!viewedIndices.has(index)) {
 						viewedIndices.add(index);
+
+						// Burn the card only now. Remembering at fetch time spent up
+						// to 25 repositories per batch that the reader never reached.
+						const project = projects[index];
+						if (project && isRealRepo(project)) rememberRepoIds(seenRepoIds, [project.id]);
+
 						interject(index);
 					}
 
@@ -298,7 +416,7 @@
 	 * Boot
 	 * --------------------------------------------------------------------- */
 
-	const loadInitial = async () => {
+	const loadInitial = async (honourSharedLink = true) => {
 		isLoading = true;
 		loadError = null;
 		try {
@@ -313,7 +431,7 @@
 			const url = new URL(window.location.href);
 			const project = url.searchParams.get('project');
 			const author = url.searchParams.get('author');
-			if (project && author && !isReload()) {
+			if (honourSharedLink && project && author && !isReload()) {
 				try {
 					initial.push(await fetchProject(author, project));
 				} catch (error) {
@@ -338,6 +456,18 @@
 		marked.use({ gfm: true });
 		restoreSession();
 		seenRepoIds = loadSeenRepoIds();
+
+		// Already-shown cards still need excluding from this session's draws, so
+		// the queue starts from what the reader has seen before.
+		for (const id of seenRepoIds) queuedIds.add(id);
+
+		// Decay runs once per session rather than per signal: taste drifts on the
+		// scale of weeks, and a reader who stops opening Rust repos should see
+		// Rust fade rather than stay pinned by history.
+		profile = applySessionDecay(loadProfile());
+		saveProfile(profile);
+
+		appliedFilter = JSON.stringify($filterStore);
 		loadInitial();
 
 		// Cosmetic extras are fired off separately: neither should be able to
@@ -446,6 +576,8 @@
 
 <AmbientBackdrop />
 
+<FilterPanel open={filterOpen} onClose={closeFilter} />
+
 <div
 	bind:this={scroller}
 	class="no-scrollbar h-[100dvh] w-full snap-y snap-mandatory overflow-y-scroll"
@@ -475,15 +607,20 @@
 				</span>
 			{/if}
 
-			<a
-				href="/setup"
-				class="rounded-pill border-ink-50/10 bg-ink-850/70 text-ink-200 hover:border-ink-50/25 hover:text-ink-50 flex
-					items-center gap-1.5 border px-3 py-1.5 font-mono text-[11px]
-					backdrop-blur-md transition-colors"
+			<!-- An active filter is never allowed to be invisible: a reader who
+			     forgets they narrowed the feed and returns to a strangely thin one
+			     is the exact failure this replaces. -->
+			<button
+				onclick={() => (filterOpen = true)}
+				class="rounded-pill flex items-center gap-1.5 border px-3 py-1.5 font-mono text-[11px]
+					backdrop-blur-md transition-colors {filterActive
+					? 'border-accent-400/50 bg-accent-500/15 text-accent-300 hover:border-accent-400/70'
+					: 'border-ink-50/10 bg-ink-850/70 text-ink-200 hover:border-ink-50/25 hover:text-ink-50'}"
+				aria-label="{filterActive ? `Filtering: ${filterLabel}` : 'Filter the feed'}. Open filters"
 			>
 				<SlidersHorizontal class="h-3.5 w-3.5" />
-				{topicLabel}
-			</a>
+				{filterLabel}
+			</button>
 
 			{#if authAvailable}
 				{#if $session}
@@ -531,7 +668,7 @@
 				<h2 class="text-ink-50 text-xl font-semibold">Nothing to scroll</h2>
 				<p class="text-ink-300 mt-2 text-sm leading-relaxed">{loadError}</p>
 				<button
-					onclick={loadInitial}
+					onclick={() => loadInitial()}
 					class="rounded-panel bg-ink-50 text-ink-950 mt-5 inline-flex items-center gap-2 px-4
 						py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
 				>
@@ -569,6 +706,7 @@
 						promoted={project.id === PROMOTED_CARD}
 						retryReadme={() => retryReadme(index)}
 						active={index === activeIndex}
+						onSignal={(kind) => recordSignal(project, kind)}
 					/>
 				{/if}
 			</div>
