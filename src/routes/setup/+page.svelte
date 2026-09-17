@@ -1,231 +1,282 @@
 <!--
-  Purpose: Choose the topics that shape the feed
-  Context: Entirely optional — the feed works without it. So this screen has to
-           be fast to use and even faster to leave. Selections save instantly;
-           there is no save button to forget.
+  Purpose: Solve cold start for the taste-learning engine, by recognition not recall
+  Context: Entirely optional — the feed works without it, and door 3 always
+           reaches it in one tap. Three doors, ranked by effort: import GitHub
+           stars (years of judgement already recorded), the 20-second swipe
+           taste test (fun, and a tutorial for the feed's own gesture), or just
+           start scrolling. Topic filtering itself lives in the feed's
+           FilterPanel now — this screen never applies a hard filter.
 -->
 
 <script lang="ts">
-	import { topics } from '$lib/topics';
-	import { topicsStore } from '$lib/stores/topics';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Search, X, ArrowRight, Plus, Sparkles } from 'lucide-svelte';
-	import TopicGroup from '$lib/components/TopicGroup.svelte';
+	import { LogIn, Sparkles, ArrowRight, RefreshCw, Check } from 'lucide-svelte';
+	import posthog from 'posthog-js';
+
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import TasteTest, { type DeckEntry } from '$lib/components/TasteTest.svelte';
 
-	// A short, opinionated starting set beats an empty search box.
-	const popular = [
-		'react',
-		'python',
-		'rust',
-		'typescript',
-		'machine-learning',
-		'cli',
-		'self-hosted',
-		'devops',
-		'game-development',
-		'security'
-	];
+	import { loadProfile, saveProfile, observeRepos } from '$lib/taste/profile';
+	import { applySignal } from '$lib/taste/attribution';
+	import { importFromStars, type ImportResult } from '$lib/taste/import';
+	import { isAuthConfigured } from '$lib/github/config';
+	import { session, beginSignIn } from '$lib/github/auth';
+	import { NotAuthenticatedError } from '$lib/github/stars';
 
-	let query = $state('');
-
-	const allTopics = flatten(topics);
-
-	function flatten(node: unknown): string[] {
-		if (Array.isArray(node)) return node as string[];
-		if (node && typeof node === 'object') {
-			return Object.entries(node).flatMap(([key, child]) => [key, ...flatten(child)]);
-		}
-		return [];
-	}
-
-	const matches = $derived.by(() => {
-		const term = query.trim().toLowerCase();
-		if (!term) return [];
-		return [...new Set(allTopics)]
-			.filter((topic) => topic.toLowerCase().includes(term) && !$topicsStore.has(topic))
-			.slice(0, 8);
-	});
-
-	const isNewTopic = $derived(
-		query.trim().length > 0 &&
-			!allTopics.includes(query.trim().toLowerCase()) &&
-			!$topicsStore.has(query.trim().toLowerCase())
-	);
-
-	const selected = $derived([...$topicsStore]);
+	const authAvailable = isAuthConfigured();
 	const pretty = (value: string) => value.replace(/[-_]/g, ' ');
 
-	function pick(topic: string) {
-		topicsStore.toggle(topic);
-		query = '';
+	let profile = loadProfile();
+
+	/* --------------------------------------------------------------------- *
+	 * Door 1 — import GitHub stars
+	 * --------------------------------------------------------------------- */
+	type ImportState = 'idle' | 'importing' | 'done' | 'error';
+
+	let importState = $state<ImportState>('idle');
+	let importResult = $state<ImportResult | null>(null);
+	let importErrorMessage = $state<string | null>(null);
+
+	async function handleImportStars() {
+		if (!$session) {
+			beginSignIn(window.location.pathname + window.location.search);
+			return;
+		}
+
+		importState = 'importing';
+		importErrorMessage = null;
+
+		try {
+			const result = await importFromStars(profile);
+			profile = result.profile;
+			saveProfile(profile);
+			importResult = result;
+			importState = 'done';
+			posthog.capture('taste_import_completed', { imported: result.imported });
+		} catch (error) {
+			if (error instanceof NotAuthenticatedError) {
+				beginSignIn(window.location.pathname + window.location.search);
+				return;
+			}
+			importErrorMessage =
+				error instanceof Error ? error.message : "Couldn't read your stars — try again.";
+			importState = 'error';
+			posthog.capture('taste_import_failed');
+		}
 	}
 
-	function submit(event: Event) {
-		event.preventDefault();
-		const term = query.trim().toLowerCase();
-		if (term) pick(matches[0] ?? term);
+	/* --------------------------------------------------------------------- *
+	 * Door 2 — swipe taste test
+	 * --------------------------------------------------------------------- */
+	let showTasteTest = $state(false);
+
+	// Called the moment the test ends, not when the reader clicks through to the
+	// feed. Dismissing the result screen used to throw away all eight answers —
+	// the worst possible outcome for someone who just did the work.
+	function handleTasteTestAnswers(result: { liked: DeckEntry[]; skipped: DeckEntry[] }) {
+		const { liked, skipped } = result;
+		if (!liked.length && !skipped.length) return;
+
+		// Corpus first: rarity weighting needs a denominator before any signal
+		// is attributed against it.
+		profile = observeRepos(profile, [...liked, ...skipped]);
+		for (const repo of liked) {
+			profile = applySignal(profile, {
+				kind: 'star',
+				topics: repo.topics,
+				language: repo.language
+			});
+		}
+		for (const repo of skipped) {
+			profile = applySignal(profile, {
+				kind: 'not_interested',
+				topics: repo.topics,
+				language: repo.language
+			});
+		}
+		saveProfile(profile);
 	}
 </script>
 
 <Seo
-	title="Pick Your Topics — GitTok"
-	description="Choose the languages and topics you care about, and GitTok tailors the repository feed to match."
+	title="Set Up Your Feed — GitTok"
+	description="Give the feed a head start: import your GitHub stars, take a 20-second taste test, or just start scrolling."
 	path="/setup"
-	imageAlt="Choose the topics your GitTok feed is built from"
+	imageAlt="Give the GitTok feed a head start"
 />
 
 <AmbientBackdrop />
 
-<main class="mx-auto min-h-[100dvh] w-full max-w-3xl px-5 pt-16 pb-36 sm:px-6">
+<main class="mx-auto min-h-[100dvh] w-full max-w-xl px-5 pt-16 pb-16 sm:px-6">
 	<header>
 		<h1 class="text-ink-50 text-[2rem] leading-tight font-semibold sm:text-4xl">
-			What are you into?
+			Give the feed a head start
 		</h1>
-		<p class="text-ink-300 mt-3 max-w-lg text-[0.9375rem] leading-relaxed">
-			Pick a few topics and the feed will lean towards them. Skip it and you'll get everything — you
-			can change this at any time.
+		<p class="text-ink-300 mt-3 max-w-md text-[0.9375rem] leading-relaxed">
+			Entirely optional, and skippable any time. Pick whichever gets you into repos fastest.
 		</p>
 	</header>
 
-	<!-- Search first: the fastest path for anyone who already knows -->
-	<form onsubmit={submit} class="relative mt-8">
-		<Search
-			class="text-ink-500 pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2"
-		/>
-		<input
-			type="text"
-			bind:value={query}
-			placeholder="Search topics, or add your own"
-			autocomplete="off"
-			class="rounded-panel border-ink-50/10 bg-ink-850/70 text-ink-100 placeholder:text-ink-500 hover:border-ink-50/20 focus:border-accent-500/50 w-full
-				border py-3.5 pr-4 pl-11
-				text-[0.9375rem] backdrop-blur-md transition-colors
-				focus:outline-none"
-		/>
-
-		{#if matches.length || isNewTopic}
-			<div
-				class="rounded-panel border-ink-50/10 bg-ink-800/95 shadow-lift absolute inset-x-0 top-full z-20
-					mt-2 overflow-hidden border backdrop-blur-xl"
+	<div class="mt-9 flex flex-col gap-4">
+		<!-- Door 1: recommended — one tap, uses judgement already recorded -->
+		{#if authAvailable}
+			<section
+				class="rounded-card border-accent-500/30 bg-ink-850/70 shadow-pop relative overflow-hidden
+					border p-5 sm:p-6"
 			>
-				{#each matches as topic (topic)}
-					<button
-						type="button"
-						onclick={() => pick(topic)}
-						class="text-ink-200 hover:bg-ink-50/6 hover:text-ink-50 flex w-full items-center gap-2.5 px-4 py-2.5
-							text-left font-mono text-[13px] transition-colors"
-					>
-						<Plus class="text-ink-500 h-3.5 w-3.5" />
-						{pretty(topic)}
-					</button>
-				{/each}
-
-				{#if isNewTopic}
-					<button
-						type="button"
-						onclick={() => pick(query.trim().toLowerCase())}
-						class="border-ink-50/8 text-accent-300 hover:bg-accent-500/10 flex w-full items-center gap-2.5 border-t
-							px-4 py-2.5 text-left font-mono text-[13px]
-							transition-colors"
-					>
-						<Plus class="h-3.5 w-3.5" />
-						Add "{query.trim().toLowerCase()}"
-					</button>
-				{/if}
-			</div>
-		{/if}
-	</form>
-
-	<!-- Selected: always visible, always removable -->
-	{#if selected.length}
-		<section class="mt-8">
-			<div class="flex items-center justify-between">
-				<h2 class="text-ink-400 font-mono text-[11px] tracking-[0.12em] uppercase">Selected</h2>
-				<button
-					onclick={() => topicsStore.reset()}
-					class="text-ink-500 hover:text-danger font-mono text-[11px] transition-colors"
+				<span
+					class="rounded-pill border-accent-500/40 bg-accent-500/15 text-accent-300 inline-flex
+						items-center border px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] uppercase"
 				>
-					Clear all
-				</button>
+					Recommended · one tap
+				</span>
+
+				<div class="mt-4 flex items-start gap-4">
+					<div
+						class="border-accent-500/30 bg-accent-500/10 flex h-11 w-11 flex-none items-center
+							justify-center rounded-full border"
+					>
+						<LogIn class="text-accent-300 h-5 w-5" aria-hidden="true" />
+					</div>
+					<div class="min-w-0">
+						<h2 class="text-ink-50 text-lg font-semibold">Use my GitHub stars</h2>
+						<p class="text-ink-300 mt-1 text-[0.875rem] leading-relaxed">
+							Years of exactly this judgement, already recorded. We'll read what you've starred and
+							skip the guesswork.
+						</p>
+					</div>
+				</div>
+
+				<div class="mt-5">
+					{#if importState === 'idle'}
+						<button
+							type="button"
+							onclick={handleImportStars}
+							class="rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex min-h-11 w-full
+								items-center justify-center gap-2 px-5 py-3 text-[0.9375rem] font-semibold
+								transition-transform duration-150 hover:scale-[1.02] active:scale-[0.99]"
+						>
+							{$session ? 'Import my stars' : 'Connect GitHub'}
+							<ArrowRight class="h-4 w-4" aria-hidden="true" />
+						</button>
+					{:else if importState === 'importing'}
+						<div
+							class="border-ink-50/10 bg-ink-50/5 rounded-panel flex min-h-11 w-full
+								items-center justify-center gap-2.5 border px-5 py-3"
+							aria-busy="true"
+						>
+							<div
+								class="border-ink-50/20 border-t-accent-400 h-4 w-4 animate-spin rounded-full
+									border-2"
+								aria-hidden="true"
+							></div>
+							<span class="text-ink-200 text-[0.875rem]">Reading your stars…</span>
+						</div>
+					{:else if importState === 'done' && importResult}
+						<div class="border-signal/20 bg-signal/8 rounded-panel border px-4 py-3.5">
+							<div class="flex items-center gap-2">
+								<Check class="text-signal h-4 w-4 flex-none" aria-hidden="true" />
+								<p class="text-ink-100 text-[0.875rem] font-medium">
+									{importResult.imported > 0
+										? `Imported ${importResult.imported} starred ${importResult.imported === 1 ? 'repo' : 'repos'}`
+										: "Connected — didn't find enough tagged stars to learn from"}
+								</p>
+							</div>
+							{#if importResult.topTopics.length}
+								<ul class="mt-2.5 flex flex-wrap gap-1.5">
+									{#each importResult.topTopics as topic (topic)}
+										<li
+											class="rounded-pill border-accent-500/30 bg-accent-500/10 text-accent-300
+												border px-2.5 py-1 font-mono text-[11px]"
+										>
+											{pretty(topic)}
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</div>
+						<button
+							type="button"
+							onclick={() => goto(resolve('/feed'))}
+							class="rounded-panel bg-ink-50 text-ink-950 ease-out-quint mt-3 flex min-h-11 w-full
+								items-center justify-center gap-2 px-5 py-3 text-[0.9375rem] font-semibold
+								transition-transform duration-150 hover:scale-[1.02] active:scale-[0.99]"
+						>
+							Go to your feed
+							<ArrowRight class="h-4 w-4" aria-hidden="true" />
+						</button>
+					{:else if importState === 'error'}
+						<div class="border-danger/25 bg-danger/8 rounded-panel border px-4 py-3.5">
+							<p class="text-ink-100 text-[0.875rem] leading-relaxed">
+								{importErrorMessage}
+							</p>
+						</div>
+						<button
+							type="button"
+							onclick={handleImportStars}
+							class="rounded-panel border-ink-50/15 bg-ink-50/5 text-ink-100 hover:border-ink-50/25
+								mt-3 flex min-h-11 w-full items-center justify-center gap-2 border px-5 py-2.5
+								text-[0.875rem] font-medium transition-colors"
+						>
+							<RefreshCw class="h-4 w-4" aria-hidden="true" />
+							Try again
+						</button>
+					{/if}
+				</div>
+			</section>
+		{/if}
+
+		<!-- Door 2: the fun path, and a tutorial for the feed's own gesture -->
+		<section class="rounded-card border-ink-50/10 bg-ink-850/40 border p-5 sm:p-6">
+			<div class="flex items-start gap-4">
+				<div
+					class="border-ink-50/12 bg-ink-50/5 flex h-11 w-11 flex-none items-center justify-center
+						rounded-full border"
+				>
+					<Sparkles class="text-ink-300 h-5 w-5" aria-hidden="true" />
+				</div>
+				<div class="min-w-0">
+					<h2 class="text-ink-100 text-[1.0625rem] font-semibold">Take the 20-second taste test</h2>
+					<p class="text-ink-400 mt-1 text-[0.875rem] leading-relaxed">
+						Eight repos, keep or skip. No setup — and it's the same gesture you'll use in the feed.
+					</p>
+				</div>
 			</div>
-
-			<ul class="mt-3 flex flex-wrap gap-2">
-				{#each selected as topic (topic)}
-					<li>
-						<button
-							onclick={() => topicsStore.toggle(topic)}
-							class="group rounded-pill border-accent-500/40 bg-accent-500/15 text-accent-300 hover:border-danger/50 hover:bg-danger/10
-								hover:text-danger flex items-center gap-2 border py-1.5 pr-2
-								pl-3 font-mono text-[12px] transition-colors"
-							aria-label="Remove {pretty(topic)}"
-						>
-							{pretty(topic)}
-							<X class="h-3.5 w-3.5 opacity-50 transition-opacity group-hover:opacity-100" />
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{:else}
-		<section class="mt-8">
-			<h2
-				class="text-ink-400 flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase"
+			<button
+				type="button"
+				onclick={() => (showTasteTest = true)}
+				class="rounded-panel border-ink-50/15 bg-ink-50/5 text-ink-100 hover:border-ink-50/25
+					ease-out-quint mt-4 flex min-h-11 w-full items-center justify-center gap-2 border px-5
+					py-3 text-[0.9375rem] font-medium transition-colors"
 			>
-				<Sparkles class="h-3.5 w-3.5" />
-				Popular starting points
-			</h2>
-			<ul class="mt-3 flex flex-wrap gap-2">
-				{#each popular as topic (topic)}
-					<li>
-						<button
-							onclick={() => topicsStore.toggle(topic)}
-							class="rounded-pill border-ink-50/10 bg-ink-50/3 text-ink-300 hover:border-ink-50/25 hover:text-ink-100 border
-								px-3 py-1.5 font-mono text-[12px]
-								transition-colors"
-						>
-							{pretty(topic)}
-						</button>
-					</li>
-				{/each}
-			</ul>
+				Start the test
+			</button>
 		</section>
-	{/if}
 
-	<!-- Browse: secondary to search, so it reads quietly -->
-	<section class="mt-10">
-		<h2 class="text-ink-400 font-mono text-[11px] tracking-[0.12em] uppercase">
-			Browse everything
-		</h2>
-		<div
-			class="divide-ink-50/6 rounded-card border-ink-50/8 bg-ink-850/40 mt-3 divide-y border p-2"
-		>
-			{#each Object.entries(topics) as [label, node] (label)}
-				<TopicGroup {label} node={node as string[] | Record<string, unknown>} />
-			{/each}
-		</div>
-	</section>
-</main>
-
-<!-- Commit bar: the count is the feedback, so nothing needs to be confirmed -->
-<div class="border-ink-50/8 bg-ink-900/95 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur-xl">
-	<div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4 sm:px-6">
-		<p class="text-ink-400 font-mono text-[12px]" aria-live="polite">
-			{selected.length
-				? `${selected.length} topic${selected.length === 1 ? '' : 's'} selected`
-				: 'No topics — you’ll see everything'}
-		</p>
-
+		<!-- Door 3: never a failure state, never a booby prize -->
 		<button
+			type="button"
 			onclick={() => goto(resolve('/feed'))}
-			class="group rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex items-center gap-2 px-5
-				py-2.5 text-sm font-semibold transition-transform duration-150
-				hover:scale-[1.02] active:scale-[0.99]"
+			class="group text-ink-400 hover:text-ink-100 ease-out-quint flex min-h-11 items-center
+				justify-center gap-2 py-3 text-[0.875rem] font-medium transition-colors"
 		>
-			{selected.length ? 'Start scrolling' : 'Skip for now'}
-			<ArrowRight class="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+			Just start scrolling — no setup at all
+			<ArrowRight
+				class="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5"
+				aria-hidden="true"
+			/>
 		</button>
 	</div>
-</div>
+</main>
+
+<TasteTest
+	open={showTasteTest}
+	onClose={() => (showTasteTest = false)}
+	onAnswers={handleTasteTestAnswers}
+	onDone={() => {
+		showTasteTest = false;
+		goto(resolve('/feed'));
+	}}
+/>
