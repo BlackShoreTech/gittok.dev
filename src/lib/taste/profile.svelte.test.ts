@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	applySessionDecay,
+	clearProfile,
 	confidence,
 	effectiveScore,
 	loadProfile,
 	observeRepos,
 	profileStrength,
 	saveProfile,
+	topAffinities,
 	topicIdf
 } from './profile';
 import {
@@ -282,5 +284,52 @@ describe('observeRepos', () => {
 		// Then rarity tracks the whole history and the caller's copy is untouched
 		expect(second.corpus).toEqual(corpus(2, { python: 2, cli: 1 }));
 		expect(first).toEqual(snapshot);
+	});
+});
+
+describe('clearProfile', () => {
+	it('forgets the stored profile and hands back an empty one', () => {
+		// Given a profile with real history behind it
+		saveProfile({
+			...withTopics({ rust: affinity(4, 8) }),
+			corpus: { topics: { rust: 12 }, documents: 30 }
+		});
+
+		// When the reader asks to start over
+		const cleared = clearProfile();
+
+		// Then nothing survives, including the corpus it was calibrated against
+		expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+		expect(cleared.topics).toEqual({});
+		expect(cleared.corpus.documents).toBe(0);
+		expect(loadProfile()).toEqual(expect.objectContaining({ topics: {}, languages: {} }));
+	});
+});
+
+describe('topAffinities', () => {
+	it('ranks by earned score, not raw score', () => {
+		// A single strong signal must not outrank a topic the reader has
+		// confirmed repeatedly — that ordering is the whole point of confidence.
+		const profile = withTopics({
+			once: affinity(3, 1),
+			repeatedly: affinity(3, 40)
+		});
+
+		expect(topAffinities(profile)).toEqual(['repeatedly', 'once']);
+	});
+
+	it('leaves out rejected topics', () => {
+		const profile = withTopics({ liked: affinity(2, 5), rejected: affinity(-2, 5) });
+		expect(topAffinities(profile)).toEqual(['liked']);
+	});
+
+	it('honours the limit', () => {
+		const profile = withTopics({
+			a: affinity(5, 9),
+			b: affinity(4, 9),
+			c: affinity(3, 9)
+		});
+
+		expect(topAffinities(profile, 2)).toEqual(['a', 'b']);
 	});
 });

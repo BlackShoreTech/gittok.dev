@@ -103,6 +103,32 @@ export function saveProfile(profile: TasteProfile): void {
 	}
 }
 
+/**
+ * Forgets everything learned, including the observed corpus — a reader asking to
+ * start over means the rarity calibration too, since it was derived from the
+ * same history they are discarding.
+ */
+export function clearProfile(): TasteProfile {
+	if (browser) {
+		try {
+			localStorage.removeItem(STORAGE_KEY);
+		} catch {
+			// Nothing to do; the fresh profile returned below still takes effect.
+		}
+	}
+
+	return emptyProfile();
+}
+
+/** The strongest topics learned, for showing a reader what the feed thinks. */
+export function topAffinities(profile: TasteProfile, limit = 5): string[] {
+	return Object.entries(profile.topics)
+		.filter(([, affinity]) => affinity.score > 0)
+		.sort(([, a], [, b]) => effectiveScore(b) - effectiveScore(a))
+		.slice(0, limit)
+		.map(([topic]) => topic);
+}
+
 const decayAll = (affinities: Record<string, Affinity>): Record<string, Affinity> => {
 	const next: Record<string, Affinity> = {};
 
