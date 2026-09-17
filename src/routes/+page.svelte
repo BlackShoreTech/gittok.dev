@@ -11,7 +11,6 @@
 	import GithubIcon from '$lib/components/icons/GithubIcon.svelte';
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
 	import Seo from '$lib/components/Seo.svelte';
-	import { topicsStore } from '$lib/stores/topics';
 
 	const structuredData = {
 		'@context': 'https://schema.org',
@@ -123,7 +122,7 @@
 							items-center justify-center gap-2 border px-6 py-3.5
 							text-[0.9375rem] transition-colors sm:w-auto"
 					>
-						{$topicsStore.size > 0 ? `${$topicsStore.size} topics picked` : 'Pick your topics'}
+						Set up your feed
 					</a>
 				</div>
 

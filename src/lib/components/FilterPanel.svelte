@@ -11,7 +11,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
-	import { Search, X, Plus, Check, SlidersHorizontal, Star } from 'lucide-svelte';
+	import { Search, X, Plus, Check, SlidersHorizontal, Star, ArrowRight } from 'lucide-svelte';
 	import { filterStore, starBandOptions, isFilterActive, filterCount } from '$lib/stores/filter';
 	import { languages, languageColors } from '$lib/github/feed';
 	import { topics } from '$lib/topics';
@@ -378,37 +378,50 @@
 
 			<!-- Footer: pinned. The count is the only truth the reader needs at a glance. -->
 			<div
-				class="border-ink-50/8 flex flex-none items-center justify-between gap-4 border-t px-5
-					py-4"
+				class="border-ink-50/8 flex flex-none flex-col border-t px-5 py-4"
 				style="padding-bottom: max(1rem, env(safe-area-inset-bottom))"
 			>
-				<div class="flex min-w-0 flex-col items-start gap-1">
-					<p aria-live="polite" class="text-ink-200 font-mono text-[12px] tabular-nums">
-						{activeCount > 0
-							? `${activeCount} filter${activeCount === 1 ? '' : 's'} applied`
-							: 'No filters — showing everything'}
-					</p>
-					{#if hasActiveFilter}
-						<button
-							type="button"
-							onclick={() => filterStore.clear()}
-							class="text-ink-500 hover:text-danger -m-2 p-2 font-mono text-[11px]
-								transition-colors"
-						>
-							Clear all
-						</button>
-					{/if}
+				<div class="flex items-center justify-between gap-4">
+					<div class="flex min-w-0 flex-col items-start gap-1">
+						<p aria-live="polite" class="text-ink-200 font-mono text-[12px] tabular-nums">
+							{activeCount > 0
+								? `${activeCount} filter${activeCount === 1 ? '' : 's'} applied`
+								: 'No filters — showing everything'}
+						</p>
+						{#if hasActiveFilter}
+							<button
+								type="button"
+								onclick={() => filterStore.clear()}
+								class="text-ink-500 hover:text-danger -m-2 p-2 font-mono text-[11px]
+									transition-colors"
+							>
+								Clear all
+							</button>
+						{/if}
+					</div>
+
+					<button
+						type="button"
+						onclick={onClose}
+						class="rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex min-h-11 flex-none
+							items-center justify-center gap-2 px-5 py-3 text-[0.9375rem] font-semibold
+							transition-transform duration-150 hover:scale-[1.02] active:scale-[0.99]"
+					>
+						{activeCount > 0 ? 'Show results' : 'Done'}
+					</button>
 				</div>
 
-				<button
-					type="button"
-					onclick={onClose}
-					class="rounded-panel bg-ink-50 text-ink-950 ease-out-quint flex min-h-11 flex-none
-						items-center justify-center gap-2 px-5 py-3 text-[0.9375rem] font-semibold
-						transition-transform duration-150 hover:scale-[1.02] active:scale-[0.99]"
-				>
-					{activeCount > 0 ? 'Show results' : 'Done'}
-				</button>
+				<!-- Not a filter — a separate, implicit system. Kept apart on purpose. -->
+				<div class="border-ink-50/6 mt-3 flex justify-end border-t pt-3">
+					<a
+						href="/setup"
+						class="text-ink-500 hover:text-ink-200 -m-2 flex min-h-11 items-center gap-1 p-2
+							font-mono text-[11px] transition-colors"
+					>
+						Personalisation
+						<ArrowRight class="h-3 w-3" aria-hidden="true" />
+					</a>
+				</div>
 			</div>
 		</div>
 	</div>

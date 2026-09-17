@@ -11,14 +11,20 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { LogIn, Sparkles, ArrowRight, RefreshCw, Check } from 'lucide-svelte';
+	import { LogIn, Sparkles, ArrowRight, RefreshCw, Check, Brain, Trash2 } from 'lucide-svelte';
 	import posthog from 'posthog-js';
 
 	import AmbientBackdrop from '$lib/components/AmbientBackdrop.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import TasteTest, { type DeckEntry } from '$lib/components/TasteTest.svelte';
 
-	import { loadProfile, saveProfile, observeRepos } from '$lib/taste/profile';
+	import {
+		loadProfile,
+		saveProfile,
+		clearProfile,
+		topAffinities,
+		observeRepos
+	} from '$lib/taste/profile';
 	import { applySignal } from '$lib/taste/attribution';
 	import { importFromStars, type ImportResult } from '$lib/taste/import';
 	import { isAuthConfigured } from '$lib/github/config';
@@ -28,7 +34,7 @@
 	const authAvailable = isAuthConfigured();
 	const pretty = (value: string) => value.replace(/[-_]/g, ' ');
 
-	let profile = loadProfile();
+	let profile = $state(loadProfile());
 
 	/* --------------------------------------------------------------------- *
 	 * Door 1 — import GitHub stars
@@ -54,6 +60,7 @@
 			saveProfile(profile);
 			importResult = result;
 			importState = 'done';
+			justReset = false;
 			posthog.capture('taste_import_completed', { imported: result.imported });
 		} catch (error) {
 			if (error instanceof NotAuthenticatedError) {
@@ -97,6 +104,25 @@
 			});
 		}
 		saveProfile(profile);
+		justReset = false;
+	}
+
+	/* --------------------------------------------------------------------- *
+	 * "What GitTok has learned" — visibility + reset for the taste profile.
+	 * Reset is destructive (doc 07, Tier 3), so it needs an explicit two-step
+	 * confirm and explicit completion feedback rather than a silent wipe.
+	 * --------------------------------------------------------------------- */
+	let confirmingReset = $state(false);
+	let justReset = $state(false);
+
+	const learnedTopics = $derived(topAffinities(profile, 10));
+	const hasLearned = $derived(learnedTopics.length > 0);
+
+	function confirmReset() {
+		profile = clearProfile();
+		confirmingReset = false;
+		justReset = true;
+		posthog.capture('taste_profile_reset');
 	}
 </script>
 
@@ -269,6 +295,92 @@
 			/>
 		</button>
 	</div>
+
+	<!-- What GitTok has learned: quiet management, not another door -->
+	<section class="border-ink-50/8 mt-10 border-t pt-8">
+		<div class="flex items-center gap-2.5">
+			<Brain class="text-ink-500 h-4 w-4" aria-hidden="true" />
+			<h2 class="text-ink-400 font-mono text-[11px] tracking-[0.12em] uppercase">
+				What GitTok has learned
+			</h2>
+		</div>
+
+		{#if justReset}
+			<div
+				class="border-signal/20 bg-signal/8 rounded-panel mt-3 flex items-center gap-2 border px-4 py-3"
+			>
+				<Check class="text-signal h-4 w-4 flex-none" aria-hidden="true" />
+				<p class="text-ink-200 text-[0.8125rem]">Forgotten — the feed starts fresh.</p>
+			</div>
+		{/if}
+
+		{#if hasLearned}
+			<p class="text-ink-400 mt-3 max-w-sm text-[0.8125rem] leading-relaxed">
+				The feed leans toward these — it never restricts you to them.
+			</p>
+			<ul class="mt-3 flex flex-wrap gap-1.5">
+				{#each learnedTopics as topic (topic)}
+					<li
+						class="rounded-pill border-ink-50/12 bg-ink-50/5 text-ink-200 max-w-[160px] truncate
+							border px-2.5 py-1 font-mono text-[11px]"
+					>
+						{pretty(topic)}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="text-ink-400 mt-3 max-w-sm text-[0.8125rem] leading-relaxed">
+				Nothing yet — GitTok learns quietly as you scroll. Star a repo or skip one you're not into,
+				and the feed starts to lean your way.
+			</p>
+		{/if}
+
+		<div class="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+			<button
+				type="button"
+				onclick={() => (showTasteTest = true)}
+				class="text-ink-400 hover:text-ink-100 ease-out-quint -m-2 flex min-h-11 items-center
+					gap-1.5 p-2 text-[0.8125rem] font-medium transition-colors"
+			>
+				<RefreshCw class="h-3.5 w-3.5" aria-hidden="true" />
+				Retake the taste test
+			</button>
+
+			{#if hasLearned}
+				{#if !confirmingReset}
+					<button
+						type="button"
+						onclick={() => (confirmingReset = true)}
+						class="text-ink-500 hover:text-danger ease-out-quint -m-2 flex min-h-11 items-center
+							gap-1.5 p-2 text-[0.8125rem] font-medium transition-colors"
+					>
+						<Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+						Start over
+					</button>
+				{:else}
+					<div class="flex min-h-11 flex-wrap items-center gap-3">
+						<span class="text-ink-300 text-[0.8125rem]">Forget everything learned?</span>
+						<button
+							type="button"
+							onclick={confirmReset}
+							class="border-danger/30 bg-danger/15 text-danger hover:bg-danger/25 rounded-panel
+								min-h-11 border px-3 text-[0.8125rem] font-semibold transition-colors"
+						>
+							Yes, forget it
+						</button>
+						<button
+							type="button"
+							onclick={() => (confirmingReset = false)}
+							class="text-ink-400 hover:text-ink-100 min-h-11 px-2 text-[0.8125rem] font-medium
+								transition-colors"
+						>
+							Cancel
+						</button>
+					</div>
+				{/if}
+			{/if}
+		</div>
+	</section>
 </main>
 
 <TasteTest
