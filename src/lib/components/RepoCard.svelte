@@ -13,6 +13,7 @@
 	import { languageColors } from '$lib/github/feed';
 	import { formatCount, timeAgo, isActive } from '$lib/format';
 	import ReadmeSkeleton from './ReadmeSkeleton.svelte';
+	import StarSpark from './StarSpark.svelte';
 	import posthog from 'posthog-js';
 	import { get } from 'svelte/store';
 	import { session, beginSignIn } from '$lib/github/auth';
@@ -25,6 +26,7 @@
 		type StarFailureReason
 	} from '$lib/github/stars';
 	import { isAuthConfigured } from '$lib/github/config';
+	import { doubleTap, type TapPoint } from '$lib/actions/double-tap';
 	import type { RepoRef } from '$lib/github/readme-urls';
 
 	type Props = {
@@ -84,6 +86,26 @@
 	let starError = $state<StarFailureReason | null>(null);
 	let resolvedFor: string | null = null;
 
+	// Celebration state for the star toggle. `starBurstId` is bumped on every
+	// star (never unstar) so keyed markup remounts and replays cleanly;
+	// `starBursting` gates the overlay's lifetime so a revert or an unstar
+	// can tear it down instantly, with no orphaned particles.
+	const BURST_DURATION_MS = 560;
+	let starBurstId = $state(0);
+	let starBursting = $state(false);
+	let burstTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function clearBurstTimer() {
+		if (burstTimer !== null) {
+			clearTimeout(burstTimer);
+			burstTimer = null;
+		}
+	}
+
+	$effect(() => {
+		return () => clearBurstTimer();
+	});
+
 	// Keyed off the project identity (not index) so a recycled component
 	// instance never shows a previous card's optimistic star state.
 	$effect(() => {
@@ -93,6 +115,8 @@
 		initialStarred = null;
 		starPending = false;
 		starError = null;
+		starBursting = false;
+		clearBurstTimer();
 	});
 
 	const STAR_ERROR_MESSAGES: Record<StarFailureReason, string> = {
@@ -136,7 +160,18 @@
 				: `Star ${project.name} (${formatCount(displayedStarCount)} stars)`
 	);
 
-	const toggleStar = async () => {
+	/** Which affordance asked, so the product can tell whether the gesture is used. */
+	type StarSource = 'button' | 'double_tap';
+
+	/**
+	 * Moves the star state and reconciles it with GitHub, reverting if GitHub
+	 * refuses.
+	 *
+	 * `intent` is what the affordance promises, not what it does. The rail
+	 * button toggles. The double tap only ever adds, because a gesture that can
+	 * silently take a star away is a gesture nobody can afford to trust.
+	 */
+	const applyStar = async (intent: 'toggle' | 'add', source: StarSource) => {
 		if (starPending) return;
 		const fullName = project.full_name;
 
@@ -158,7 +193,27 @@
 				starred = current;
 			}
 
-			const next = !current;
+			// Already starred, and this affordance cannot unstar. The burst still
+			// played, which is the honest answer to the gesture: it is starred.
+			if (intent === 'add' && current) return;
+
+			const next = intent === 'add' || !current;
+
+			// Optimistic and 0ms: fires on the local flip, not the request. Only
+			// on star — unstar is a correction, and stays visually quiet.
+			if (next) {
+				clearBurstTimer();
+				starBurstId += 1;
+				starBursting = true;
+				burstTimer = setTimeout(() => {
+					starBursting = false;
+					burstTimer = null;
+				}, BURST_DURATION_MS);
+			} else {
+				clearBurstTimer();
+				starBursting = false;
+			}
+
 			starred = next;
 
 			await (next ? star(fullName) : unstar(fullName));
@@ -166,13 +221,19 @@
 			// Captured only after the request resolves. Firing before the await
 			// counted every failed star as a success, which reported a wholly
 			// broken feature as working.
-			posthog.capture('star_repository', { repository: fullName, starred: next });
+			posthog.capture('star_repository', { repository: fullName, starred: next, source });
 
 			// Only starring is evidence of interest. Unstarring is a correction,
 			// not a rejection, so it teaches nothing either way.
 			if (next) onSignal?.('star');
 		} catch (error) {
-			if (project.full_name === fullName) starred = previous;
+			if (project.full_name === fullName) {
+				starred = previous;
+				// The optimistic celebration promised a star that didn't happen —
+				// tear it down instantly so no fill, ring, or particle lingers.
+				clearBurstTimer();
+				starBursting = false;
+			}
 
 			if (error instanceof NotAuthenticatedError) {
 				beginSignIn(window.location.pathname + window.location.search);
@@ -181,17 +242,51 @@
 
 			const reason = error instanceof StarRequestError ? error.reason : 'unknown';
 			if (project.full_name === fullName) starError = reason;
-			posthog.capture('star_repository_failed', { repository: fullName, reason });
+			posthog.capture('star_repository_failed', { repository: fullName, reason, source });
 		} finally {
 			starPending = false;
 		}
 	};
+
+	const toggleStar = () => applyStar('toggle', 'button');
+
+	/* --------------------------------------------------------------------- *
+	 * Double tap to star
+	 * The gesture people already arrive knowing. It is additive only, and it
+	 * acknowledges itself where the finger landed — an invisible gesture is
+	 * indistinguishable from a broken one.
+	 * --------------------------------------------------------------------- */
+
+	// Re-keyed on every gesture so a second tap restarts the animation rather
+	// than landing mid-flight and appearing to do nothing.
+	let burst = $state<(TapPoint & { id: number }) | null>(null);
+	let burstCount = 0;
+
+	const starByDoubleTap = (point: TapPoint) => {
+		// Without a token there is nothing to star with; the rail falls back to a
+		// link out to GitHub, and silently opening a tab from a gesture is worse
+		// than leaving it inert.
+		if (!authAvailable || starPending) return;
+
+		// Signed out, the gesture means what the button means — but it leaves for
+		// GitHub, and celebrating a star that has not happened would be a lie.
+		if (!get(session)) {
+			beginSignIn(window.location.pathname + window.location.search);
+			return;
+		}
+
+		burst = { ...point, id: ++burstCount };
+		applyStar('add', 'double_tap');
+	};
 </script>
 
 <div class="relative flex h-full min-h-0 flex-col">
+	<!-- touch-manipulation drops the browser's double-tap-to-zoom, which would
+	     otherwise swallow the gesture and the tap delay that comes with it. -->
 	<article
-		class="surface rounded-card shadow-lift relative flex min-h-0 flex-1 flex-col overflow-hidden
-			{promoted ? 'ring-accent-500/40 ring-1' : ''}"
+		use:doubleTap={{ ondoubletap: starByDoubleTap }}
+		class="surface rounded-card shadow-lift relative flex min-h-0 flex-1 touch-manipulation
+			flex-col overflow-hidden {promoted ? 'ring-accent-500/40 ring-1' : ''}"
 	>
 		<!-- Identity: who made this, how healthy is it -->
 		<header class="flex-none px-5 pt-5 sm:px-7 sm:pt-6">
@@ -334,6 +429,24 @@
 				/>
 			</a>
 		</footer>
+
+		<!-- Lands under the finger, clamped so the card's own edges never
+		     guillotine it. Purely an acknowledgement — the rail's filled star and
+		     count report the actual outcome. -->
+		{#if burst}
+			{#key burst.id}
+				<div
+					class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2"
+					style="left: clamp(2.5rem, {burst.x}px, 100% - 2.5rem);
+						top: clamp(2.5rem, {burst.y}px, 100% - 2.5rem)"
+					aria-hidden="true"
+				>
+					<div class="star-burst" onanimationend={() => (burst = null)}>
+						<Star class="text-spark h-20 w-20" fill="currentColor" />
+					</div>
+				</div>
+			{/key}
+		{/if}
 	</article>
 
 	<!-- Action rail: overlays the card on narrow screens, sits in the gutter on wide ones -->
@@ -343,24 +456,33 @@
 	>
 		<div class="relative flex flex-col items-center gap-1">
 			{#if authAvailable}
-				<button
-					type="button"
-					onclick={toggleStar}
-					disabled={starPending}
-					aria-pressed={displayStarred}
-					aria-label={starAriaLabel}
-					aria-busy={starPending}
-					class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-spark/40 flex h-11 w-11 items-center
-						justify-center rounded-full border backdrop-blur-md transition-all
-						duration-150 hover:scale-110 active:scale-95 disabled:cursor-wait disabled:opacity-70
-						disabled:hover:scale-100 {displayStarred ? 'border-spark/50' : ''}"
-				>
-					<Star
-						class="text-spark h-5 w-5"
-						fill={displayStarred ? 'currentColor' : 'none'}
-						aria-hidden="true"
-					/>
-				</button>
+				<div class="relative h-11 w-11">
+					<button
+						type="button"
+						onclick={toggleStar}
+						disabled={starPending}
+						aria-pressed={displayStarred}
+						aria-label={starAriaLabel}
+						aria-busy={starPending}
+						class="border-ink-50/10 bg-ink-800/80 ease-out-quint hover:border-spark/40 flex h-11 w-11 items-center
+							justify-center rounded-full border backdrop-blur-md transition-all
+							duration-150 hover:scale-110 active:scale-95 disabled:cursor-wait disabled:opacity-70
+							disabled:hover:scale-100 {displayStarred ? 'border-spark/50' : ''}"
+					>
+						{#key starBurstId}
+							<Star
+								class="text-spark h-5 w-5 {starBurstId > 0 ? 'animate-star-pop' : ''}"
+								fill={displayStarred ? 'currentColor' : 'none'}
+								aria-hidden="true"
+							/>
+						{/key}
+					</button>
+					{#if starBursting}
+						{#key starBurstId}
+							<StarSpark />
+						{/key}
+					{/if}
+				</div>
 			{:else}
 				<a
 					href={project.stargazersUrl}
@@ -376,7 +498,11 @@
 				</a>
 			{/if}
 			<span class="text-ink-300 font-mono text-[11px] tabular-nums">
-				{formatCount(displayedStarCount)}
+				{#key displayedStarCount}
+					<span class="inline-block {starBursting ? 'animate-count-tick' : ''}">
+						{formatCount(displayedStarCount)}
+					</span>
+				{/key}
 			</span>
 
 			<!-- Anchored to the star button and extending left, because the rail
@@ -473,3 +599,49 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	/* Overshoots once and leaves. The drop shadow is for legibility over a
+	   README, not a glow — the star carries the only colour here. */
+	.star-burst {
+		animation: star-burst 640ms var(--ease-out-quint) forwards;
+		filter: drop-shadow(0 4px 12px rgb(0 0 0 / 0.55));
+	}
+
+	@keyframes star-burst {
+		0% {
+			opacity: 0;
+			transform: scale(0.4) rotate(-14deg);
+		}
+		30% {
+			opacity: 1;
+			transform: scale(1.12) rotate(2deg);
+		}
+		55% {
+			opacity: 1;
+			transform: scale(0.97) rotate(0deg);
+		}
+		100% {
+			opacity: 0;
+			transform: scale(1.22) rotate(0deg);
+		}
+	}
+
+	/* Still announces itself — the gesture is invisible without it — but holds
+	   still while it does. */
+	@media (prefers-reduced-motion: reduce) {
+		.star-burst {
+			animation: star-burst-hold 640ms linear forwards;
+		}
+
+		@keyframes star-burst-hold {
+			0%,
+			70% {
+				opacity: 1;
+			}
+			100% {
+				opacity: 0;
+			}
+		}
+	}
+</style>

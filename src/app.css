@@ -103,6 +103,108 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Star celebration
+   The one moment on an otherwise calm card allowed a burst of delight.
+   Star-only: the toggle is the trigger, never unstar. Transform + opacity
+   only, so this stays cheap to run mid-scroll. Disabled wholesale under
+   prefers-reduced-motion — the star still fills, just without motion.
+--------------------------------------------------------------------------- */
+@layer components {
+	.star-spark-overlay {
+		pointer-events: none;
+	}
+
+	.star-spark-ring {
+		position: absolute;
+		inset: 0;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-spark);
+		opacity: 0;
+		animation: star-spark-ring 480ms var(--ease-out-quint) forwards;
+	}
+
+	.star-spark-particle {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		border-radius: var(--radius-pill);
+		background: var(--color-spark);
+		opacity: 0;
+		animation: star-spark-particle 480ms var(--ease-out-quint) forwards;
+		animation-delay: var(--delay, 0ms);
+	}
+
+	@keyframes star-spark-ring {
+		0% {
+			transform: scale(0.85);
+			opacity: 0.9;
+		}
+		100% {
+			transform: scale(2.2);
+			opacity: 0;
+		}
+	}
+
+	@keyframes star-spark-particle {
+		0% {
+			transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(1);
+			opacity: 1;
+		}
+		70% {
+			opacity: 0.7;
+		}
+		100% {
+			transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance)) scale(0.4);
+			opacity: 0;
+		}
+	}
+
+	.animate-star-pop {
+		animation: star-pop 500ms var(--ease-out-quint);
+	}
+
+	@keyframes star-pop {
+		0% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(1.32);
+		}
+		70% {
+			transform: scale(0.96);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
+	.animate-count-tick {
+		display: inline-block;
+		animation: count-tick-in 220ms var(--ease-out-quint);
+	}
+
+	@keyframes count-tick-in {
+		from {
+			transform: translateY(6px);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0);
+			opacity: 1;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.star-spark-ring,
+		.star-spark-particle,
+		.animate-star-pop,
+		.animate-count-tick {
+			animation: none !important;
+		}
+	}
+}
+
+/* ---------------------------------------------------------------------------
    README rendering
    Replaces the CDN github-markdown-css, which never matched the container
    class and therefore never applied. Scoped to .readme-content only.
