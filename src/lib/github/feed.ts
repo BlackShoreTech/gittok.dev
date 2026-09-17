@@ -282,16 +282,37 @@ export function shuffle<T>(values: T[], random: Random = Math.random): T[] {
 	return result;
 }
 
+/**
+ * The two ways the feed can be narrowed, kept deliberately distinct.
+ *
+ * `language` and `starBand` are the reader's explicit filter: hard qualifiers
+ * that GitHub applies. `chooseTopic` is where taste plugs in — it only changes
+ * *which* topic gets drawn from the pool, never the pool itself, so learning can
+ * tilt the feed without ever walling it off. Injecting it keeps this module
+ * unaware of the taste engine entirely.
+ */
+export interface FeedQueryOptions {
+	language?: string | null;
+	starBand?: string | null;
+	chooseTopic?: (pool: readonly string[], random: Random) => string;
+}
+
 export function getRandomSearchQuery(
 	topics: string[],
 	seenQueries: Record<string, QueryMemory>,
-	random: Random = Math.random
+	random: Random = Math.random,
+	options: FeedQueryOptions = {}
 ): URLSearchParams {
-	const topic = pick(topics, random);
-	const band = pickWeighted(starBands, random);
+	const topic = (options.chooseTopic ?? pick)(topics, random);
+	const band = options.starBand ?? pickWeighted(starBands, random);
 	const ordering = pick(orderings, random);
 
-	const q = `${band} topic:${topic}`;
+	// GitHub ANDs repeated qualifiers and rejects `OR` between them outright
+	// (422), so a reader's several topics are drawn one per search rather than
+	// combined into one query.
+	const q = options.language
+		? `${band} topic:${topic} ${options.language}`
+		: `${band} topic:${topic}`;
 	const searchParams = new URLSearchParams();
 
 	searchParams.set('q', q);
@@ -322,10 +343,11 @@ export async function fetchFeedPage(
 	octokit: Octokit,
 	topics: string[],
 	seenQueries: Record<string, QueryMemory>,
-	random: Random = Math.random
+	random: Random = Math.random,
+	options: FeedQueryOptions = {}
 ): Promise<FeedProject[]> {
 	for (let attempt = 0; attempt < MAX_DRAWS; attempt++) {
-		const searchParams = getRandomSearchQuery(topics, seenQueries, random);
+		const searchParams = getRandomSearchQuery(topics, seenQueries, random, options);
 		const q = searchParams.get('q') ?? '';
 
 		const run = async (): Promise<FeedProject[]> => {
