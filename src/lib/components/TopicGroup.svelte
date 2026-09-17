@@ -15,27 +15,34 @@
 		label: string;
 		node: TopicNode;
 		depth?: number;
+		/** Overrides which topics read as selected. Defaults to topicsStore. */
+		selected?: Set<string>;
+		/** Overrides the toggle action. Defaults to topicsStore.toggle. */
+		onToggle?: (topic: string) => void;
 	};
 
-	const { label, node, depth = 0 }: Props = $props();
+	const { label, node, depth = 0, selected: selectedProp, onToggle }: Props = $props();
 
 	let open = $state(false);
 
 	const leaves = $derived(Array.isArray(node) ? node : []);
 	const branches = $derived(Array.isArray(node) ? [] : Object.entries(node));
+	const selected = $derived(selectedProp ?? $topicsStore);
 
 	// A category is "on" when anything inside it is selected — the reason to
 	// open it should be visible without opening it.
-	const selectedCount = $derived(countSelected(node, $topicsStore));
+	const selectedCount = $derived(countSelected(node, selected));
 
-	function countSelected(value: TopicNode, selected: Set<string>): number {
-		if (Array.isArray(value)) return value.filter((t) => selected.has(t)).length;
+	function countSelected(value: TopicNode, selectedSet: Set<string>): number {
+		if (Array.isArray(value)) return value.filter((t) => selectedSet.has(t)).length;
 		return Object.entries(value).reduce(
 			(total, [key, child]) =>
-				total + (selected.has(key) ? 1 : 0) + countSelected(child as TopicNode, selected),
+				total + (selectedSet.has(key) ? 1 : 0) + countSelected(child as TopicNode, selectedSet),
 			0
 		);
 	}
+
+	const toggle = (topic: string) => (onToggle ? onToggle(topic) : topicsStore.toggle(topic));
 
 	const pretty = (value: string) => value.replace(/[-_]/g, ' ');
 </script>
@@ -67,17 +74,17 @@
 			{#if leaves.length}
 				<div class="flex flex-wrap gap-1.5 py-1">
 					{#each leaves as topic (topic)}
-						{@const selected = $topicsStore.has(topic)}
+						{@const isSelected = selected.has(topic)}
 						<button
-							onclick={() => topicsStore.toggle(topic)}
-							aria-pressed={selected}
+							onclick={() => toggle(topic)}
+							aria-pressed={isSelected}
 							class="rounded-pill flex items-center gap-1.5 border px-3 py-1.5 font-mono
 								text-[12px] transition-colors duration-150
-								{selected
+								{isSelected
 								? 'border-accent-500/50 bg-accent-500/15 text-accent-300'
 								: 'border-ink-50/10 bg-ink-50/3 text-ink-300 hover:border-ink-50/25 hover:text-ink-100'}"
 						>
-							{#if selected}
+							{#if isSelected}
 								<Check class="h-3 w-3" />
 							{/if}
 							{pretty(topic)}
@@ -87,7 +94,13 @@
 			{/if}
 
 			{#each branches as [childLabel, childNode] (childLabel)}
-				<Self label={childLabel} node={childNode as TopicNode} depth={depth + 1} />
+				<Self
+					label={childLabel}
+					node={childNode as TopicNode}
+					depth={depth + 1}
+					selected={selectedProp}
+					{onToggle}
+				/>
 			{/each}
 		</div>
 	{/if}
