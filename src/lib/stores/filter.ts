@@ -57,6 +57,11 @@ const migrateLegacyTopics = (): FeedFilter => {
 		const legacy = localStorage.getItem(LEGACY_TOPICS_KEY);
 		if (!legacy) return emptyFilter();
 
+		// One way, and exactly once. Clearing the filter removes its key, so a
+		// migration that left the old one behind would read it again on the next
+		// load and silently restore topics the reader had just removed.
+		localStorage.removeItem(LEGACY_TOPICS_KEY);
+
 		const parsed: unknown = JSON.parse(legacy);
 		if (!isStringArray(parsed) || !parsed.length) return emptyFilter();
 
