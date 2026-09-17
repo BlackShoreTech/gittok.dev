@@ -19,6 +19,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"update-topics": "bun run scripts/get_all_curated_topics.js",
+		"build-taste-deck": "bun run scripts/build_taste_deck.ts",
 		"update-stars": "bun run scripts/get_all_stars.ts",
 		"feature-repos": "bun run scripts/feature_repos.ts",
 		"db:setup": "cat drizzle/0000_initial.sql | sqlite3 static/data/db.sqlite"
